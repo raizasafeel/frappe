@@ -2,7 +2,6 @@
 # License: MIT. See LICENSE
 import datetime
 import json
-import keyword
 import weakref
 from types import MappingProxyType
 from typing import TYPE_CHECKING, TypeVar
