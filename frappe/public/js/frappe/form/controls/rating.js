@@ -11,7 +11,11 @@ frappe.ui.form.ControlRating = class ControlRating extends frappe.ui.form.Contro
 		});
 
 		const star_template = `
-			<div class="rating">
+			<div class="rating" tabindex="0"
+			role="slider" 
+				aria-valuemin="0" aria-valuemax="1" aria-valuenow="0"
+				aria-label="${frappe.utils.escape_html(__(this.df.label || "Rating"))}"
+				>
 				${stars}
 			</div>
 		`;
@@ -39,6 +43,25 @@ frappe.ui.form.ControlRating = class ControlRating extends frappe.ui.form.Contro
 			.find("svg")
 			.click((ev) => {
 				this.update_rating(ev, true);
+			});
+
+		$(this.input_area)
+			.find(".rating")
+			.on("keydown", (e) => {
+				if (!this.can_write()) return;
+				let current = this.get_value() || 0;
+				let step = 0.5 / number_of_stars;
+				if (e.key === "ArrowRight" || e.key === "ArrowUp") {
+					e.preventDefault();
+					let new_val = Math.min(1, current + step);
+					this.validate_and_set_in_model(new_val);
+					this.set_formatted_input(new_val);
+				} else if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
+					e.preventDefault();
+					let new_val = Math.max(0, current - step);
+					this.validate_and_set_in_model(new_val);
+					this.set_formatted_input(new_val);
+				}
 			});
 	}
 
@@ -89,6 +112,7 @@ frappe.ui.form.ControlRating = class ControlRating extends frappe.ui.form.Contro
 			if (this.doctype && this.docname) {
 				this.set_input(star_value);
 			}
+			$(this.input_area).find(".rating").attr("aria-valuenow", star_value);
 		}
 	}
 
@@ -97,6 +121,7 @@ frappe.ui.form.ControlRating = class ControlRating extends frappe.ui.form.Contro
 	}
 	set_formatted_input(value) {
 		let out_of_ratings = this.df.options || 5;
+		$(this.input_area).find(".rating").attr("aria-valuenow", value || 0);
 		value = value * out_of_ratings;
 		value = Math.round(value * 2) / 2; // roundoff number to nearest 0.5
 		let el = $(this.input_area).find("svg");
