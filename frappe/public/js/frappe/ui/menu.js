@@ -12,9 +12,11 @@ frappe.ui.menu = class ContextMenu {
 		Object.assign(this, opts);
 		this.nested_menus = [];
 		this.setup_menu_toggle();
+		this.setup_keyboard_nav();
 	}
 	setup_menu_toggle() {
 		const me = this;
+		$(this.opts.parent).attr("aria-haspopup", "true").attr("aria-expanded", "false");
 		if (this.opts.right_click) {
 			$(this.opts.parent).on("contextmenu", function (event) {
 				event.preventDefault();
@@ -42,6 +44,47 @@ frappe.ui.menu = class ContextMenu {
 				}
 			});
 		}
+	}
+	setup_keyboard_nav() {
+		const me = this;
+		this.template.on("keydown", function (e) {
+			const items = me.template.find('[role="menuitem"]');
+			if (!items.length) return;
+			const current = items.index(document.activeElement);
+
+			switch (e.key) {
+				case "ArrowDown":
+					e.preventDefault();
+					items.eq((current + 1) % items.length).focus();
+					break;
+				case "ArrowUp":
+					e.preventDefault();
+					items.eq((current - 1 + items.length) % items.length).focus();
+					break;
+				case "Home":
+					e.preventDefault();
+					items.first().focus();
+					break;
+				case "End":
+					e.preventDefault();
+					items.last().focus();
+					break;
+				case "Escape":
+					e.preventDefault();
+					me.hide();
+					$(me.opts.parent).trigger("focus");
+					break;
+				case "Tab":
+					me.hide();
+					$(me.opts.parent).trigger("focus");
+					break;
+				case "Enter":
+				case " ":
+					e.preventDefault();
+					$(document.activeElement).closest(".dropdown-menu-item").trigger("click");
+					break;
+			}
+		});
 	}
 	make() {
 		this.template.empty();
@@ -86,11 +129,11 @@ frappe.ui.menu = class ContextMenu {
 		const me = this;
 		item.nested_menus = [];
 		let item_wrapper = $(
-			`<div class="dropdown-menu-item"><div class="dropdown-divider documentation-links"></div></div>`
+			`<div class="dropdown-menu-item" role="menuitem"><div class="dropdown-divider documentation-links"></div></div>`
 		);
 		if (item?.is_divider) {
 			item_wrapper = $(
-				`<div class="dropdown-menu-item"><div class="dropdown-divider documentation-links"></div></div>`
+				`<div class="dropdown-menu-item" role="separator"><div class="dropdown-divider documentation-links"></div></div>`
 			);
 		} else {
 			const iconMarkup = item.icon_url
@@ -101,10 +144,10 @@ frappe.ui.menu = class ContextMenu {
 				? frappe.utils.icon(item.icon)
 				: "";
 			let chevron_direction = frappe.utils.is_rtl() ? "left " : "right";
-			item_wrapper = $(`<div class="dropdown-menu-item" onclick="${
+			item_wrapper = $(`<div class="dropdown-menu-item" role="none" onclick="${
 				item.action ? `return ${item.action}` : ""
 			}">
-				<a>
+				<a role="menuitem" tabindex="-1">
 					<div class="menu-item-icon" ${!(iconMarkup != "") ? "hidden" : ""}>
 						${iconMarkup}
 					</div>
@@ -201,6 +244,8 @@ frappe.ui.menu = class ContextMenu {
 			});
 			this.visible = true;
 			frappe.visible_menus.push(this);
+			$(this.opts.parent).attr("aria-expanded", "true");
+			this.template.find('[role="menuitem"]').first().trigger("focus");
 			return;
 		}
 
@@ -235,6 +280,8 @@ frappe.ui.menu = class ContextMenu {
 
 		this.visible = true;
 		frappe.visible_menus.push(this);
+		$(this.opts.parent).attr("aria-expanded", "true");
+		this.template.find('[role="menuitem"]').first().trigger("focus");
 	}
 	close_all_other_menu() {
 		$(".context-menu").hide();
@@ -242,6 +289,7 @@ frappe.ui.menu = class ContextMenu {
 	hide() {
 		this.template.css("display", "none");
 		this.visible = false;
+		$(this.opts.parent).attr("aria-expanded", "false");
 	}
 	mouseX(evt) {
 		if (evt.pageX) {
