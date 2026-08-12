@@ -402,6 +402,32 @@ function firstEnabled(root: HTMLElement | null, selector: string): HTMLElement |
 	return null;
 }
 
+/**
+ * How long to wait for a closing menu to return focus to its trigger before
+ * giving up and placing focus anyway. Only reached when nothing takes focus at
+ * all — the wait normally ends on the menu's own restore, whenever that lands.
+ */
+const MENU_RESTORE_TIMEOUT = 300;
+
+/**
+ * Focus the row at `path`, after the closing menu has finished returning focus
+ * to its trigger. The restore lands a frame or more later — after the menu's
+ * exit — so this waits for it rather than for a guessed number of frames, and
+ * then places focus where the edit left the row.
+ */
+function focusAfterMenuCloses(path: ConditionPath) {
+	let timer: ReturnType<typeof setTimeout>;
+
+	function place() {
+		document.removeEventListener("focusin", place);
+		clearTimeout(timer);
+		moveFocus({ kind: "row", path }, "remove");
+	}
+
+	timer = setTimeout(place, MENU_RESTORE_TIMEOUT);
+	document.addEventListener("focusin", place);
+}
+
 function addToRoot() {
 	const next = addConditionAt(tree.value, [], newLeaf());
 	commit(next);
@@ -488,9 +514,11 @@ provide(conditionBuilderKey, {
 
 		commit(moveNode(tree.value, path, from, to));
 		announce(labels.value.moved(options?.name ?? "", from + 1, to + 1, total));
-		// Onto the row's own menu — the button the move was run from, now at the
-		// new position — which is where a removal lands focus too.
-		if (options?.focus !== false) moveFocus({ kind: "row", path: [...path, to] }, "remove");
+		// Onto the row's own menu, now at the new position, so a second Move Up moves
+		// the same row again. It has to outlast the menu it was run from: that menu
+		// returns focus to its own trigger as it closes, and rows are keyed by index,
+		// so the trigger it returns to is the row this one displaced.
+		if (options?.focus !== false) focusAfterMenuCloses([...path, to]);
 	},
 	announce,
 	lastRemoval: computed(() => lastRemoval.value),

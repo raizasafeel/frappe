@@ -40,26 +40,6 @@
 			:style="{ gridTemplateColumns: trackList }"
 			@change="onDragChange"
 		>
-			<!-- The rule the and/or chips sit on, drawn as a grid item of the group
-			rather than a border of each row: spanning the rows means it crosses the
-			gaps between them too, which is what makes the group read as one span. It
-			starts at the second row, where the first operator is — the `Where` cell
-			above it names the group rather than joining anything. `span` and not
-			`/ -1`: with no explicit rows, `-1` resolves to the first line, not the
-			last. Behind the chips in paint order, and hidden from assistive tech,
-			which reads the operators themselves. -->
-			<template #header>
-				<span
-					v-if="group.conditions.length > 1"
-					aria-hidden="true"
-					class="w-px self-stretch justify-self-center bg-outline-gray-2"
-					:style="{
-						gridColumn: '1',
-						gridRow: `2 / span ${group.conditions.length - 1}`,
-					}"
-				/>
-			</template>
-
 			<template #item="{ element: condition, index }">
 				<li
 					class="grid items-center gap-x-2"
@@ -70,6 +50,7 @@
 					<slot v-if="index === 0" name="where" v-bind="whereProps()">
 						<ConjunctionCell
 							:index="index"
+							:count="group.conditions.length"
 							:conjunction="conjunctionAt(index)"
 							:can-toggle="canToggleAt(index)"
 							:group-path="path"
@@ -78,6 +59,7 @@
 					<slot v-else name="conjunction" v-bind="conjunctionProps(index)">
 						<ConjunctionCell
 							:index="index"
+							:count="group.conditions.length"
 							:conjunction="conjunctionAt(index)"
 							:can-toggle="canToggleAt(index)"
 							:group-path="path"

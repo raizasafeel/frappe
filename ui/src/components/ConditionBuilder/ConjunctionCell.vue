@@ -12,7 +12,22 @@
   `aria-describedby`.
 -->
 <template>
-	<div class="flex min-w-[66px] items-center justify-center text-p-base text-ink-gray-5">
+	<div
+		class="relative flex min-w-[66px] items-center justify-center self-stretch text-p-base text-ink-gray-5"
+	>
+		<!-- This row's length of the group's bracket, drawn by the cell the chip is
+		in so it is centred on the chip whatever the cell's width resolves to. Each
+		end reaches half the row gap past the cell — `gap-y-4`, hence 8px — so the
+		lengths meet and the group reads as one rule rather than as ticks beside its
+		rows. It runs between the chips it joins: from the middle of the first row,
+		clear of the `Where` above it, to the middle of the last. -->
+		<span
+			v-if="rule"
+			aria-hidden="true"
+			class="absolute start-1/2 border-s border-outline-gray-2"
+			:style="rule"
+		/>
+
 		<div v-if="index === 0">{{ labels.where }}</div>
 		<template v-else-if="showsWord">
 			<Button
@@ -49,6 +64,9 @@ const props = defineProps<{
 
 	/** Whether this gap's control is live. Decided by the group, not here. */
 	canToggle?: boolean;
+
+	/** How many rows the group holds, which is where the bracket ends. */
+	count?: number;
 }>();
 
 const context = useConditionBuilderContext();
@@ -63,4 +81,26 @@ const word = computed(() => (props.conjunction === "and" ? labels.value.and : la
  * shown — which is also the only row whose control is live.
  */
 const showsWord = computed(() => context.conjunctionMode.value === "mixed" || props.index === 1);
+
+/** Half of the group's `gap-y-4`, which each end reaches into to meet the next. */
+const REACH = "-8px";
+
+/** Half the line height of the cell's own text, which the rule starts clear of. */
+const CLEAR_OF_TEXT = "calc(50% + 12px)";
+
+/**
+ * This row's length of the bracket, or nothing for a group of one — which joins
+ * nothing and so draws no rule. The rule runs between the ends it joins rather
+ * than the full height of the group: it starts under the `Where` naming the
+ * group, and stops at the middle of the last row instead of trailing off into
+ * the gap below it.
+ */
+const rule = computed(() => {
+	const count = props.count ?? 0;
+	if (count < 2) return undefined;
+	return {
+		top: props.index === 0 ? CLEAR_OF_TEXT : REACH,
+		bottom: props.index === count - 1 ? "50%" : REACH,
+	};
+});
 </script>
