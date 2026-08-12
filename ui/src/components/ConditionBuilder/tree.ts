@@ -36,7 +36,8 @@ function nextConjunction<T>(group: ConditionGroup<T>): Conjunction {
  * `conditions` already counts the new child.
  */
 function pushConjunction<T>(group: ConditionGroup<T>): void {
-  if (group.conditions.length > 1) group.conjunctions.push(nextConjunction(group));
+  if (group.conditions.length > 1)
+    group.conjunctions.push(nextConjunction(group));
 }
 
 /**
@@ -126,6 +127,42 @@ export function removeNode<T>(
   // A group that just lost its last child goes with it.
   if (parent.conditions.length === 0 && path.length > 1) {
     return removeNode(next, path.slice(0, -1));
+  }
+  return next;
+}
+
+/**
+ * Move a child within its own group. Reordering never reparents, so the tree's
+ * shape — and every other row's path — survives the move.
+ *
+ * The operator travels with the row that displayed it, which is the rule
+ * `removeConjunctionAt` already follows: the vacated gap closes the same way a
+ * removal closes it, and the carried word reopens one at the destination. A row
+ * dropped at the top displays no operator, so its word goes to the gap below it,
+ * where the row it displaced now reads it.
+ */
+export function moveNode<T>(
+  tree: ConditionGroup<T>,
+  groupPath: ConditionPath,
+  from: number,
+  to: number
+): ConditionGroup<T> {
+  const next = clone(tree);
+  const group = getNode(next, groupPath);
+  if (group === undefined || !isGroup(group)) return next;
+
+  const last = group.conditions.length - 1;
+  if (from === to || from < 0 || to < 0 || from > last || to > last)
+    return next;
+
+  const [node] = group.conditions.splice(from, 1);
+  const carried = group.conjunctions[from === 0 ? 0 : from - 1] ?? "and";
+  removeConjunctionAt(group, from);
+
+  group.conditions.splice(to, 0, node);
+  // Only if the move re-opened a gap: a group of one has none to carry.
+  if (group.conditions.length > 1) {
+    group.conjunctions.splice(to === 0 ? 0 : to - 1, 0, carried);
   }
   return next;
 }

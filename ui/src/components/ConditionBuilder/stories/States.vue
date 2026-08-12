@@ -29,6 +29,15 @@ const nullish = ref<ConditionGroup | null>(null);
 const readonlyTree = ref<ConditionGroup>(structuredClone(filled));
 const disabledTree = ref<ConditionGroup>(structuredClone(filled));
 
+// Rows keep their handles and their move items unless the host turns them off.
+const fixedOrder = ref<ConditionGroup>({
+	conjunctions: ["and"],
+	conditions: [
+		{ fieldname: "status", operator: "equals", value: "Open" },
+		{ fieldname: "subject", operator: "like", value: "urgent" },
+	],
+});
+
 // Every value control the dispatch can pick, so each one renders.
 const allTypes = ref<ConditionGroup>({
 	conjunctions: ["and", "and", "and", "and", "and", "and"],
@@ -61,6 +70,11 @@ const cases = [
 		title: "Disabled (adding blocked)",
 		model: disabledTree,
 		props: { disabled: true },
+	},
+	{
+		title: "Not reorderable",
+		model: fixedOrder,
+		props: { reorderable: false },
 	},
 	{ title: "Every value control", model: allTypes, props: {} },
 	{ title: "Preserved and unknown entries", model: preserved, props: {} },

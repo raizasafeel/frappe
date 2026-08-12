@@ -107,6 +107,7 @@ import {
 	emptyTree,
 	getNode,
 	isGroup,
+	moveNode,
 	removeNode,
 	setGroupConjunction,
 	toggleConjunction as toggleConjunctionAt,
@@ -144,6 +145,7 @@ const props = withDefaults(defineProps<ConditionBuilderProps<TLeaf>>(), {
 	disabled: false,
 	readonly: false,
 	conjunctionMode: "mixed",
+	reorderable: true,
 });
 
 const emit = defineEmits<{
@@ -420,6 +422,7 @@ provide(conditionBuilderKey, {
 	disabled: computed(() => props.disabled),
 	readonly: computed(() => props.readonly),
 	conjunctionMode: computed(() => props.conjunctionMode),
+	reorderable: computed(() => props.reorderable),
 
 	addCondition: (path: ConditionPath) => {
 		const next = addConditionAt(tree.value, path, newLeaf());
@@ -468,6 +471,26 @@ provide(conditionBuilderKey, {
 		if (group === undefined || !isGroup(group)) return;
 		const current = group.conjunctions[gap] ?? "and";
 		commit(setGroupConjunction(tree.value, path, current === "and" ? "or" : "and"));
+	},
+	// A reorder keeps every path in the tree valid — only the two rows that
+	// swapped change what they address — so no `lastRemoval` is raised and an open
+	// nested dialog stays open.
+	move: (
+		path: ConditionPath,
+		from: number,
+		to: number,
+		options?: { name?: string; focus?: boolean }
+	) => {
+		const group = getNode(tree.value, path);
+		if (group === undefined || !isGroup(group)) return;
+		const total = group.conditions.length;
+		if (from === to || from < 0 || to < 0 || from >= total || to >= total) return;
+
+		commit(moveNode(tree.value, path, from, to));
+		announce(labels.value.moved(options?.name ?? "", from + 1, to + 1, total));
+		// Onto the row's own menu — the button the move was run from, now at the
+		// new position — which is where a removal lands focus too.
+		if (options?.focus !== false) moveFocus({ kind: "row", path: [...path, to] }, "remove");
 	},
 	announce,
 	lastRemoval: computed(() => lastRemoval.value),

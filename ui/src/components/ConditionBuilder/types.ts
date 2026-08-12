@@ -91,6 +91,17 @@ export interface ConditionBuilderLabels {
   openNested: string;
   nestedTitle: string;
 
+  /**
+   * The menu items that move a row. Dragging is the pointer path to the same
+   * edit; these are how it is reached without one, which is why they are worded
+   * as actions and not as a description of the drag handle.
+   */
+  moveUp: string;
+  moveDown: string;
+
+  /** Names a nested group's card, alongside the count of what it holds. */
+  groupSummary: (conditions: number) => string;
+
   /** Accessible name for a row's overflow menu. Never rendered as text. */
   rowActions: string;
 
@@ -116,6 +127,15 @@ export interface ConditionBuilderLabels {
    * asked to delete in.
    */
   removed: (remaining: number, groupRemoved: boolean) => string;
+
+  /**
+   * Announced after a row is reordered. A drop and a menu move are the same
+   * edit, so both say the same sentence. It carries where the row came from as
+   * well as where it landed: a position on its own is only meaningful to
+   * someone who watched it move. Positions are 1-based; `name` is the row's
+   * field, and empty for a leaf the builder cannot name.
+   */
+  moved: (name: string, from: number, to: number, total: number) => string;
 }
 
 export interface ConditionBuilderProps<TLeaf = FieldConditionValue> {
@@ -188,6 +208,15 @@ export interface ConditionBuilderProps<TLeaf = FieldConditionValue> {
    * shares one. Defaults to `'mixed'`.
    */
   conjunctionMode?: ConditionConjunctionMode;
+
+  /**
+   * Whether rows can be reordered within their group, by drag or from the row
+   * menu. Defaults to true. Order is meaningful to read even where it does not
+   * change the result, so this is for hosts that sort the tree themselves and
+   * would have the user's arrangement overwritten. Reordering never reparents:
+   * a row cannot leave the group it is in.
+   */
+  reorderable?: boolean;
 }
 
 export interface ConditionSlotProps<TLeaf = FieldConditionValue> {
@@ -281,6 +310,18 @@ export interface ActionsSlotProps {
 
   /** False when nesting here would exceed `maxDepth`. */
   canGroup: boolean;
+
+  /** False for the first row of a group, which has nowhere above to go. */
+  canMoveUp: boolean;
+
+  /** False for the last row of a group. */
+  canMoveDown: boolean;
+
+  /** Swap this row with the one above it. */
+  moveUp: () => void;
+
+  /** Swap this row with the one below it. */
+  moveDown: () => void;
 
   /** Wrap this leaf in a new group. */
   turnIntoGroup: () => void;

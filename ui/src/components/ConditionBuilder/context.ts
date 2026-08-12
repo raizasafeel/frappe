@@ -48,6 +48,7 @@ export interface ConditionBuilderContext {
   disabled: ComputedRef<boolean>;
   readonly: ComputedRef<boolean>;
   conjunctionMode: ComputedRef<ConditionConjunctionMode>;
+  reorderable: ComputedRef<boolean>;
 
   addCondition: (groupPath: ConditionPath) => void;
   addGroup: (groupPath: ConditionPath) => void;
@@ -57,6 +58,19 @@ export interface ConditionBuilderContext {
   ungroup: (path: ConditionPath) => void;
   /** Flip one gap. `gap` indexes `conjunctions`, i.e. the row index minus one. */
   toggleConjunction: (groupPath: ConditionPath, gap: number) => void;
+
+  /**
+   * Reorder one child within its group. `name` is what the announcement calls
+   * the row: the group holds the field label, this does not. A drop and a menu
+   * move both land here and both announce; only the menu move places focus,
+   * since a pointer drop has not taken any.
+   */
+  move: (
+    groupPath: ConditionPath,
+    from: number,
+    to: number,
+    options?: { name?: string; focus?: boolean }
+  ) => void;
 
   /** Put a message in the builder's live region. */
   announce: (message: string) => void;
@@ -96,6 +110,9 @@ export const DEFAULT_BORDERS: ConditionBorders = "all";
 
 /** Per-gap operators. `uniform` — one operator per group — is opt-in. */
 export const DEFAULT_CONJUNCTION_MODE: ConditionConjunctionMode = "mixed";
+
+/** Rows reorder unless the host sorts the tree itself. */
+export const DEFAULT_REORDERABLE = true;
 
 /**
  * The host's translation function, read off the global at call time: this
@@ -141,6 +158,12 @@ export function defaultLabels(): ConditionBuilderLabels {
     empty: t("Add a Condition"),
     openNested: t("Open Nested Conditions"),
     nestedTitle: t("Nested Conditions"),
+    moveUp: t("Move Up"),
+    moveDown: t("Move Down"),
+    groupSummary: (conditions) =>
+      conditions === 1
+        ? t("Group · {0} condition", [conditions])
+        : t("Group · {0} conditions", [conditions]),
     rowActions: t("Condition actions"),
     groupActions: t("Group actions"),
     field: t("Field"),
@@ -157,6 +180,19 @@ export function defaultLabels(): ConditionBuilderLabels {
       ]
         .filter(Boolean)
         .join(" "),
+    moved: (name, from, to, total) =>
+      name
+        ? t("{0} moved from position {1} to position {2} of {3}.", [
+            name,
+            from,
+            to,
+            total,
+          ])
+        : t("Condition moved from position {0} to position {1} of {2}.", [
+            from,
+            to,
+            total,
+          ]),
   };
 }
 
@@ -233,7 +269,10 @@ const FALLBACK_CONTEXT: ConditionBuilderContext = {
   modalDepth: computed(() => DEFAULT_MODAL_DEPTH),
   disabled: computed(() => false),
   readonly: computed(() => false),
-  conjunctionMode: computed<ConditionConjunctionMode>(() => DEFAULT_CONJUNCTION_MODE),
+  conjunctionMode: computed<ConditionConjunctionMode>(
+    () => DEFAULT_CONJUNCTION_MODE
+  ),
+  reorderable: computed(() => DEFAULT_REORDERABLE),
 
   addCondition: () => {},
   addGroup: () => {},
@@ -242,6 +281,7 @@ const FALLBACK_CONTEXT: ConditionBuilderContext = {
   turnIntoGroup: () => {},
   ungroup: () => {},
   toggleConjunction: () => {},
+  move: () => {},
   announce: () => {},
   lastRemoval: computed(() => null),
 };

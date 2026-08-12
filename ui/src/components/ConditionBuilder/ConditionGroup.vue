@@ -19,123 +19,182 @@
 			{{ groupName }}
 		</legend>
 
+		<!-- The card's own name, and how much it holds — a nested group is otherwise
+		an unlabelled box. Hidden from the accessibility tree: the group is already
+		named by `aria-label`, and this would announce it a second time. -->
+		<div v-if="hasCard" class="text-p-sm text-ink-gray-5" aria-hidden="true">
+			{{ context.labels.value.groupSummary(group.conditions.length) }}
+		</div>
+
 		<!-- Rows are subgrids of this grid, so the columns line up across rows.
 		`display: contents` matches them too but drops the row's role and name. -->
-		<ul
+		<Draggable
 			v-if="group.conditions.length"
+			:model-value="group.conditions"
+			:item-key="keyOf"
+			:disabled="!canReorder"
+			handle=".condition-drag-handle"
+			tag="ul"
 			role="list"
 			class="grid w-full min-w-0 list-none items-center gap-x-2 gap-y-4"
 			:style="{ gridTemplateColumns: trackList }"
+			@change="onDragChange"
 		>
-			<li
-				v-for="(condition, index) in group.conditions"
-				:key="index"
-				class="grid items-center gap-x-2"
-				style="grid-template-columns: subgrid; grid-column: 1 / -1"
-				:data-condition-path="[...path, index].join('.')"
-				:data-condition-builder="context.builderId.value"
-			>
-				<slot v-if="index === 0" name="where" v-bind="whereProps()">
-					<ConjunctionCell
-						:index="index"
-						:conjunction="conjunctionAt(index)"
-						:can-toggle="canToggleAt(index)"
-						:group-path="path"
-					/>
-				</slot>
-				<slot v-else name="conjunction" v-bind="conjunctionProps(index)">
-					<ConjunctionCell
-						:index="index"
-						:conjunction="conjunctionAt(index)"
-						:can-toggle="canToggleAt(index)"
-						:group-path="path"
-					/>
-				</slot>
+			<!-- The rule the and/or chips sit on, drawn as a grid item of the group
+			rather than a border of each row: spanning the rows means it crosses the
+			gaps between them too, which is what makes the group read as one span. It
+			starts at the second row, where the first operator is — the `Where` cell
+			above it names the group rather than joining anything. `span` and not
+			`/ -1`: with no explicit rows, `-1` resolves to the first line, not the
+			last. Behind the chips in paint order, and hidden from assistive tech,
+			which reads the operators themselves. -->
+			<template #header>
+				<span
+					v-if="group.conditions.length > 1"
+					aria-hidden="true"
+					class="w-px self-stretch justify-self-center bg-outline-gray-2"
+					:style="{
+						gridColumn: '1',
+						gridRow: `2 / span ${group.conditions.length - 1}`,
+					}"
+				/>
+			</template>
 
-				<template v-if="isGroup(condition)">
-					<div class="min-w-0" style="grid-column: span 3">
-						<Button
-							v-if="childIsModal()"
-							data-slot="open-nested"
-							variant="outline"
-							class="w-max"
-							:label="context.labels.value.openNested"
-							aria-haspopup="dialog"
-							:aria-expanded="nestedOpen === index"
-							@click="nestedOpen = index"
-						/>
-						<ConditionGroup
-							v-else
-							:group="asGroup(condition)"
-							:path="[...path, index]"
-							:base-depth="baseDepth"
-						>
-							<template v-if="$slots.condition" #condition="slotProps">
-								<slot name="condition" v-bind="slotProps" />
-							</template>
-							<template v-if="$slots.value" #value="valueProps">
-								<slot name="value" v-bind="valueProps" />
-							</template>
-							<template v-if="$slots.where" #where="whereSlot">
-								<slot name="where" v-bind="whereSlot" />
-							</template>
-							<template v-if="$slots.conjunction" #conjunction="conjSlot">
-								<slot name="conjunction" v-bind="conjSlot" />
-							</template>
-							<template v-if="$slots.actions" #actions="actionsSlot">
-								<slot name="actions" v-bind="actionsSlot" />
-							</template>
-							<template v-if="$slots.addCondition" #addCondition="addSlot">
-								<slot name="addCondition" v-bind="addSlot" />
-							</template>
-						</ConditionGroup>
-					</div>
-				</template>
-
-				<ConditionRow
-					v-else
-					:condition="condition"
-					:path="[...path, index]"
-					:field-label-id="rowFieldId(index)"
+			<template #item="{ element: condition, index }">
+				<li
+					class="grid items-center gap-x-2"
+					style="grid-template-columns: subgrid; grid-column: 1 / -1"
+					:data-condition-path="[...path, index].join('.')"
+					:data-condition-builder="context.builderId.value"
 				>
-					<template v-if="$slots.condition" #condition="slotProps">
-						<slot name="condition" v-bind="slotProps" />
-					</template>
-					<template v-if="$slots.value" #value="valueProps">
-						<slot name="value" v-bind="valueProps" />
-					</template>
-				</ConditionRow>
+					<slot v-if="index === 0" name="where" v-bind="whereProps()">
+						<ConjunctionCell
+							:index="index"
+							:conjunction="conjunctionAt(index)"
+							:can-toggle="canToggleAt(index)"
+							:group-path="path"
+						/>
+					</slot>
+					<slot v-else name="conjunction" v-bind="conjunctionProps(index)">
+						<ConjunctionCell
+							:index="index"
+							:conjunction="conjunctionAt(index)"
+							:can-toggle="canToggleAt(index)"
+							:group-path="path"
+						/>
+					</slot>
 
-				<slot name="actions" v-bind="actionsProps(index, isGroup(condition))">
-					<ConditionActions
+					<!-- Pointer-only, and hidden from assistive tech: the row's menu
+					carries Move Up / Move Down, which is the reliable way to reorder
+					without a pointer and keeps the row to one button that opens things. -->
+					<div
+						v-if="canReorder"
+						class="condition-drag-handle flex h-7 w-4 cursor-grab items-center justify-center"
+						aria-hidden="true"
+					>
+						<span class="lucide-grip-vertical size-4 text-ink-gray-4" />
+					</div>
+
+					<template v-if="isGroup(condition)">
+						<div class="min-w-0" style="grid-column: span 3">
+							<Button
+								v-if="childIsModal()"
+								data-slot="open-nested"
+								variant="outline"
+								class="w-max"
+								:label="context.labels.value.openNested"
+								aria-haspopup="dialog"
+								:aria-expanded="nestedOpen === index"
+								@click="nestedOpen = index"
+							/>
+							<ConditionGroup
+								v-else
+								:group="asGroup(condition)"
+								:path="[...path, index]"
+								:base-depth="baseDepth"
+							>
+								<template v-if="$slots.condition" #condition="slotProps">
+									<slot name="condition" v-bind="slotProps" />
+								</template>
+								<template v-if="$slots.value" #value="valueProps">
+									<slot name="value" v-bind="valueProps" />
+								</template>
+								<template v-if="$slots.where" #where="whereSlot">
+									<slot name="where" v-bind="whereSlot" />
+								</template>
+								<template v-if="$slots.conjunction" #conjunction="conjSlot">
+									<slot name="conjunction" v-bind="conjSlot" />
+								</template>
+								<template v-if="$slots.actions" #actions="actionsSlot">
+									<slot name="actions" v-bind="actionsSlot" />
+								</template>
+								<template v-if="$slots.addCondition" #addCondition="addSlot">
+									<slot name="addCondition" v-bind="addSlot" />
+								</template>
+							</ConditionGroup>
+						</div>
+					</template>
+
+					<ConditionRow
+						v-else
+						:condition="condition"
 						:path="[...path, index]"
-						:is-group="isGroup(condition)"
 						:field-label-id="rowFieldId(index)"
-					/>
-				</slot>
+					>
+						<template v-if="$slots.condition" #condition="slotProps">
+							<slot name="condition" v-bind="slotProps" />
+						</template>
+						<template v-if="$slots.value" #value="valueProps">
+							<slot name="value" v-bind="valueProps" />
+						</template>
+					</ConditionRow>
 
-				<span :id="rowFieldId(index)" class="sr-only">
-					{{ leafFieldLabel(condition, context.fields.value) }}
-				</span>
-			</li>
-		</ul>
+					<slot name="actions" v-bind="actionsProps(index, isGroup(condition))">
+						<ConditionActions
+							:path="[...path, index]"
+							:is-group="isGroup(condition)"
+							:field-label-id="rowFieldId(index)"
+							:can-move-up="canReorder && index > 0"
+							:can-move-down="canReorder && index < group.conditions.length - 1"
+							:move-up="() => moveRow(index, index - 1)"
+							:move-down="() => moveRow(index, index + 1)"
+						/>
+					</slot>
 
+					<span :id="rowFieldId(index)" class="sr-only">
+						{{ leafFieldLabel(condition, context.fields.value) }}
+					</span>
+				</li>
+			</template>
+		</Draggable>
+
+		<!-- Two buttons rather than one menu: there are only ever two things to add,
+		and a menu makes the common one — a condition — cost a second click. Adding a
+		group is dropped rather than disabled past `maxDepth`, since nothing the user
+		can do here would re-enable it. -->
 		<div
 			v-if="!context.readonly.value"
-			class="flex"
+			class="flex gap-2"
 			:data-add-group="path.join('.')"
 			:data-condition-builder="context.builderId.value"
 		>
 			<slot name="addCondition" v-bind="addConditionProps()">
-				<Dropdown v-slot="{ open }" :options="addOptions">
-					<Button
-						data-slot="add-condition"
-						:disabled="context.disabled.value"
-						:label="context.labels.value.addCondition"
-						icon-left="lucide-plus"
-						:icon-right="open ? 'lucide-chevron-up' : 'lucide-chevron-down'"
-					/>
-				</Dropdown>
+				<Button
+					data-slot="add-condition"
+					:disabled="context.disabled.value"
+					:label="context.labels.value.addCondition"
+					icon-left="lucide-plus"
+					@click="context.addCondition(path)"
+				/>
+				<Button
+					v-if="canAddGroup"
+					data-slot="add-group"
+					variant="ghost"
+					:disabled="context.disabled.value"
+					:label="context.labels.value.addGroup"
+					icon-left="lucide-folder-plus"
+					@click="context.addGroup(path)"
+				/>
 			</slot>
 		</div>
 
@@ -178,7 +237,9 @@
 
 <script setup lang="ts">
 import { computed, ref, useId, watch } from "vue";
-import { Button, Dialog, Dropdown } from "frappe-ui";
+import { Button, Dialog } from "frappe-ui";
+// @ts-ignore — vuedraggable ships no bundled types
+import Draggable from "vuedraggable";
 import type { FilterField } from "../Filter/types";
 import ConditionActions from "./ConditionActions.vue";
 import ConditionRow from "./ConditionRow.vue";
@@ -231,32 +292,42 @@ defineSlots<GroupSlots>();
 const context = useConditionBuilderContext();
 const rowIdPrefix = useId();
 
-interface AddItem {
-	label: string;
-	onClick: () => void;
-}
-
 const canAddGroup = computed(() => canNest(props.path, context.maxDepth.value));
 
-const addOptions = computed<AddItem[]>(() => {
-	const labels = context.labels.value;
+/** Whether this group's rows can be dragged. A read-only tree cannot be edited
+ * at all, and `disabled` blocks adding rather than rearranging. */
+const canReorder = computed(() => context.reorderable.value && !context.readonly.value);
 
-	const items: AddItem[] = [
-		{
-			label: labels.addCondition,
-			onClick: () => context.addCondition(props.path),
-		},
-	];
+/**
+ * A row's key: its index, which is what keeps a row's DOM — and the focus inside
+ * it — in place across the commits an edit makes. Keying by the node's identity
+ * would remount every row on every keystroke, since each edit clones the tree.
+ * `indexOf` is by reference, and a group holds few enough rows for the scan.
+ */
+function keyOf(node: unknown): number {
+	return props.group.conditions.indexOf(node);
+}
 
-	if (canAddGroup.value) {
-		items.push({
-			label: labels.addGroup,
-			onClick: () => context.addGroup(props.path),
-		});
-	}
+interface DragChange {
+	moved?: { element: unknown; oldIndex: number; newIndex: number };
+}
 
-	return items;
-});
+/**
+ * A drop. `change` rather than `update:modelValue`: it carries the two indices,
+ * and the tree is edited by path, not by handing back a rearranged array.
+ * vuedraggable has already put the dragged node back where it started by the
+ * time this runs, so the commit below is what actually moves it.
+ */
+function onDragChange(event: DragChange) {
+	const moved = event.moved;
+	if (!moved) return;
+	context.move(props.path, moved.oldIndex, moved.newIndex, {
+		name: leafFieldLabel(moved.element, context.fields.value),
+		// The pointer holds no focus to return, and stealing it after a drop would
+		// put a focus ring somewhere the user never typed.
+		focus: false,
+	});
+}
 
 // Only nested groups draw their own card; the root's border is the builder's.
 // `bordered: 'root'` drops these, so depth reads from indentation alone.
@@ -293,15 +364,21 @@ function canToggleAt(index: number): boolean {
 	return context.conjunctionMode.value === "mixed" || index === 1;
 }
 
+// The handle's track only exists where there is a handle: an empty one would
+// indent every row of a tree that cannot be rearranged. A group's row spans the
+// three content tracks, which stay the three after the handle either way.
 const trackList = computed(() => {
 	const columns = context.columns.value;
 	return [
 		"minmax(66px, max-content)",
+		canReorder.value ? "max-content" : null,
 		columns.field,
 		columns.operator,
 		columns.value,
 		"max-content",
-	].join(" ");
+	]
+		.filter(Boolean)
+		.join(" ");
 });
 
 /** Id of the span holding a row's field label, which names its controls. */
@@ -339,16 +416,28 @@ function conjunctionProps(index: number): ConjunctionSlotProps {
 
 function actionsProps(index: number, group: boolean): ActionsSlotProps {
 	const path = [...props.path, index];
+	const last = props.group.conditions.length - 1;
 	return {
 		path,
 		isGroup: group,
 		disabled: context.disabled.value,
 		readonly: context.readonly.value,
 		canGroup: canNest(props.path, context.maxDepth.value),
+		canMoveUp: canReorder.value && index > 0,
+		canMoveDown: canReorder.value && index < last,
+		moveUp: () => moveRow(index, index - 1),
+		moveDown: () => moveRow(index, index + 1),
 		turnIntoGroup: () => context.turnIntoGroup(path),
 		ungroup: () => context.ungroup(path),
 		remove: () => context.remove(path),
 	};
+}
+
+/** A move run from a row's menu, which keeps its focus on the way. */
+function moveRow(from: number, to: number) {
+	context.move(props.path, from, to, {
+		name: leafFieldLabel(props.group.conditions[from], context.fields.value),
+	});
 }
 
 function addConditionProps(): AddConditionSlotProps {
