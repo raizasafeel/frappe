@@ -10,6 +10,8 @@ export type {
   ConditionBuilderLabels,
   ConditionBuilderProps,
   ConditionColumns,
+  ConditionConjunctionMode,
+  ConditionConjunctionPlacement,
   ConditionGroup,
   ConditionNode,
   ConditionPath,
