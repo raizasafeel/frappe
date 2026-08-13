@@ -37,43 +37,18 @@
 			<div v-else-if="group.conditions.length > 1" class="text-p-base text-ink-gray-5">
 				{{ headerWord }}
 			</div>
-			<div v-else class="text-p-sm text-ink-gray-5" aria-hidden="true">
-				{{ context.labels.value.groupSummary(group.conditions.length) }}
-			</div>
+			<span v-else />
 
 			<div
 				v-if="!context.readonly.value"
-				class="flex gap-2"
+				class="flex"
 				:data-add-group="path.join('.')"
 				:data-condition-builder="context.builderId.value"
 			>
 				<slot name="addCondition" v-bind="addConditionProps()">
-					<Button
-						data-slot="add-condition"
-						variant="ghost"
-						:disabled="context.disabled.value"
-						:label="context.labels.value.addCondition"
-						icon-left="lucide-plus"
-						@click="context.addCondition(path)"
-					/>
-					<Button
-						v-if="canAddGroup"
-						data-slot="add-group"
-						variant="ghost"
-						:disabled="context.disabled.value"
-						:label="context.labels.value.addGroup"
-						icon-left="lucide-folder-plus"
-						@click="context.addGroup(path)"
-					/>
+					<AddConditionButton :path="path" :can-add-group="canAddGroup" />
 				</slot>
 			</div>
-		</div>
-
-		<!-- The card's own name, and how much it holds — a nested group is otherwise
-		an unlabelled box. Hidden from the accessibility tree: the group is already
-		named by `aria-label`, and this would announce it a second time. -->
-		<div v-if="hasCard && !hasHeader" class="text-p-sm text-ink-gray-5" aria-hidden="true">
-			{{ context.labels.value.groupSummary(group.conditions.length) }}
 		</div>
 
 		<!-- Each row carries its own grid rather than sharing one with its siblings.
@@ -122,9 +97,10 @@
 						</slot>
 					</template>
 
-					<!-- Pointer-only, and hidden from assistive tech: the row's menu
-					carries Move Up / Move Down, which is the reliable way to reorder
-					without a pointer and keeps the row to one button that opens things. -->
+					<!-- Pointer-only, and hidden from assistive tech: it duplicates no
+					control, so there is nothing for it to name. A host that needs a
+					keyboard path to the same edit builds one in `#actions`, which is
+					handed `moveUp` / `moveDown` and their guards. -->
 					<div
 						v-if="canReorder"
 						class="condition-drag-handle flex h-7 w-4 cursor-grab items-center justify-center"
@@ -200,10 +176,6 @@
 							:path="[...path, index]"
 							:is-group="isGroup(condition)"
 							:field-label-id="rowFieldId(index)"
-							:can-move-up="canReorder && index > 0"
-							:can-move-down="canReorder && index < group.conditions.length - 1"
-							:move-up="() => moveRow(index, index - 1)"
-							:move-down="() => moveRow(index, index + 1)"
 						/>
 					</slot>
 
@@ -214,33 +186,15 @@
 			</template>
 		</Draggable>
 
-		<!-- Two buttons rather than one menu: there are only ever two things to add,
-		and a menu makes the common one — a condition — cost a second click. Adding a
-		group is dropped rather than disabled past `maxDepth`, since nothing the user
-		can do here would re-enable it. A header has already drawn these, above. -->
+		<!-- A header has already drawn this, above. -->
 		<div
 			v-if="!context.readonly.value && !hasHeader"
-			class="flex gap-2"
+			class="flex"
 			:data-add-group="path.join('.')"
 			:data-condition-builder="context.builderId.value"
 		>
 			<slot name="addCondition" v-bind="addConditionProps()">
-				<Button
-					data-slot="add-condition"
-					:disabled="context.disabled.value"
-					:label="context.labels.value.addCondition"
-					icon-left="lucide-plus"
-					@click="context.addCondition(path)"
-				/>
-				<Button
-					v-if="canAddGroup"
-					data-slot="add-group"
-					variant="ghost"
-					:disabled="context.disabled.value"
-					:label="context.labels.value.addGroup"
-					icon-left="lucide-folder-plus"
-					@click="context.addGroup(path)"
-				/>
+				<AddConditionButton :path="path" :can-add-group="canAddGroup" />
 			</slot>
 		</div>
 
@@ -287,6 +241,7 @@ import { Button, Dialog, TabButtons } from "frappe-ui";
 // @ts-ignore — vuedraggable ships no bundled types
 import Draggable from "vuedraggable";
 import type { FilterField } from "../Filter/types";
+import AddConditionButton from "./AddConditionButton.vue";
 import ConditionActions from "./ConditionActions.vue";
 import ConditionRow from "./ConditionRow.vue";
 import ConjunctionCell from "./ConjunctionCell.vue";

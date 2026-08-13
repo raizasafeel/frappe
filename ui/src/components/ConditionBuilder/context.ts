@@ -180,12 +180,6 @@ export function defaultLabels(): ConditionBuilderLabels {
     empty: t("Add a Condition"),
     openNested: t("Open Nested Conditions"),
     nestedTitle: t("Nested Conditions"),
-    moveUp: t("Move Up"),
-    moveDown: t("Move Down"),
-    groupSummary: (conditions) =>
-      conditions === 1
-        ? t("Group · {0} condition", [conditions])
-        : t("Group · {0} conditions", [conditions]),
     rowActions: t("Condition actions"),
     groupActions: t("Group actions"),
     field: t("Field"),

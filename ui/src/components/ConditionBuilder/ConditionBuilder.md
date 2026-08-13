@@ -77,10 +77,12 @@ other. A mixed tree opened in `uniform` keeps its operators until the first
 toggle flattens them.
 
 The operators sit on a rule drawn down the start edge of the group, so what a
-chip joins is visible rather than inferred from the row it happens to sit on. In
-`uniform` only the one live chip is drawn: the rows below it are joined on the
-same operator, which is said to a screen reader rather than repeated down the
-column as inert copies of the same word.
+chip joins is visible rather than inferred from the row it happens to sit on.
+Every row shows its operator, including the row a nested group's card sits in —
+a card with nothing in that cell reads as unattached. What `uniform` changes is
+how many of them are controls: the second row holds the one that rewrites the
+group, and the rows below render the word as text rather than as a disabled copy
+of the same button.
 
 ### `conjunctionPlacement`
 
@@ -97,9 +99,14 @@ header and are not rendered; `#addCondition` moves up into it.
 
 ## Reordering
 
-Rows can be dragged within their group by the handle beside the operator, and
-moved from the row's menu with `Move Up` / `Move Down`. Both run the same edit,
-announce the same sentence, and are turned off together by `reorderable: false`.
+Rows can be dragged within their group by the handle beside the operator, which
+announces where the row came from and where it landed. `reorderable: false` turns
+the handles off.
+
+Dragging is the only built-in path, so it is pointer-only. `#actions` is handed
+`moveUp` / `moveDown` and their guards, so a host that needs a keyboard path puts
+its own items in that menu; they run the same edit and announce the same
+sentence.
 
 A move never reparents: a row cannot leave the group it is in, and dropping one
 on a nested group's card does not put it inside. Grouping stays an explicit
@@ -160,7 +167,7 @@ vocabulary. No migration is needed: the host's compiler maps `equals`, `=` and
 | `#condition` | the whole row, for a leaf of your own shape |
 | `#value` | only the value control inside the built-in row |
 | `#where` / `#conjunction` | the leading cell of a row |
-| `#actions` | the row's Remove button and overflow menu |
+| `#actions` | the row's overflow menu |
 | `#addCondition` | a group's add affordance |
 | `#empty` | the empty state's content |
 
@@ -197,13 +204,11 @@ there can still be fixed or removed. `readonly` shows a rule you are not editing
   passes attrs to its trigger.
 - Removing a row moves focus to the row that took its place, and announces the
   count — plus the cascade, when the group went with it.
-- Reordering is reachable without a pointer through the row's menu rather than
-  through arrow keys on the handle: an action menu is more discoverable and more
-  reliable than a directional key mode, and it keeps a row to one button that
-  opens things. The handle is therefore `aria-hidden` — it duplicates the menu.
-  A move announces where the row came from as well as where it landed, since a
-  position on its own only means something to someone who watched it move, and
-  returns focus to the menu it was run from.
+- The drag handle is `aria-hidden`: it duplicates no control and names nothing.
+  **Reordering has no built-in keyboard path** — a known gap, and the reason
+  `#actions` is handed `moveUp` / `moveDown`. Where a host adds them, the move
+  announces both positions (a position alone means nothing to someone who did not
+  watch it move) and returns focus to the menu it was run from.
 - `readonly` renders text rather than disabled controls: a disabled control is
   skipped in a screen reader's forms mode and is exempt from the contrast
   minimum, which would make a read-only tree unreadable.

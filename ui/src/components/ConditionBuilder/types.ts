@@ -58,8 +58,9 @@ export type ConditionNode<TLeaf = FieldConditionValue> =
 
 /**
  * Widths for the built-in leaf's three editable cells, as CSS grid track sizes.
- * One grid governs a whole group, so the cells line up across its rows; `1fr`
- * shares the row's slack rather than sizing a cell to its own content.
+ * Each row resolves them against its own contents, so a cell is the width of
+ * what it holds; an `fr` here is a share of the row's leftover instead, which
+ * stretches a cell past its content to use the width up.
  */
 export interface ConditionColumns {
   field?: string;
@@ -100,17 +101,6 @@ export interface ConditionBuilderLabels {
   empty: string;
   openNested: string;
   nestedTitle: string;
-
-  /**
-   * The menu items that move a row. Dragging is the pointer path to the same
-   * edit; these are how it is reached without one, which is why they are worded
-   * as actions and not as a description of the drag handle.
-   */
-  moveUp: string;
-  moveDown: string;
-
-  /** Names a nested group's card, alongside the count of what it holds. */
-  groupSummary: (conditions: number) => string;
 
   /** Accessible name for a row's overflow menu. Never rendered as text. */
   rowActions: string;
