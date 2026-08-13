@@ -1,9 +1,9 @@
 <!--
   One leaf's slot boundary: the consumer's `#condition`, or the built-in editor.
-  `ConditionLeaf` is a subgrid, so its field / operator / value cells line up with
-  every other row's. A custom `#condition` gets one box spanning the same three
-  columns and lays out what it likes inside, since nothing says its content has
-  three parts.
+  `ConditionLeaf` is a subgrid of the row's own grid, so its field / operator /
+  value cells sit in the row's three middle tracks. A custom `#condition` gets one
+  box spanning the same three and lays out what it likes inside, since nothing
+  says its content has three parts.
 -->
 <template>
 	<div

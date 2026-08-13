@@ -26,8 +26,13 @@
 			{{ context.labels.value.groupSummary(group.conditions.length) }}
 		</div>
 
-		<!-- Rows are subgrids of this grid, so the columns line up across rows.
-		`display: contents` matches them too but drops the row's role and name. -->
+		<!-- Each row carries its own grid rather than sharing one with its siblings.
+		A shared grid sizes each track from the widest cell in the group, so every
+		field control is as wide as the longest label; per row, each control is the
+		width of what it holds and the row reads as a phrase. What the rows still
+		share is their end edge: the last track takes the leftover and pins the
+		actions to the end of it, so they line up down the group whatever the cells
+		before them hold. -->
 		<Draggable
 			v-if="group.conditions.length"
 			:model-value="group.conditions"
@@ -36,14 +41,13 @@
 			handle=".condition-drag-handle"
 			tag="ul"
 			role="list"
-			class="grid w-full min-w-0 list-none items-center gap-x-2 gap-y-4"
-			:style="{ gridTemplateColumns: trackList }"
+			class="flex w-full min-w-0 list-none flex-col gap-4"
 			@change="onDragChange"
 		>
 			<template #item="{ element: condition, index }">
 				<li
-					class="grid items-center gap-x-2"
-					style="grid-template-columns: subgrid; grid-column: 1 / -1"
+					class="grid min-w-0 items-center gap-x-2"
+					:style="{ gridTemplateColumns: trackListFor(condition) }"
 					:data-condition-path="[...path, index].join('.')"
 					:data-condition-builder="context.builderId.value"
 				>
@@ -77,8 +81,16 @@
 						<span class="lucide-grip-vertical size-4 text-ink-gray-4" />
 					</div>
 
+					<!-- A card gets a row of its own shape — one stretching track between
+					the conjunction and the actions — so it runs to the end of the row
+					rather than to wherever three content-sized cells happen to stop. A
+					group past `modalDepth` is a button in an ordinary row, and spans the
+					three the leaf would have used. -->
 					<template v-if="isGroup(condition)">
-						<div class="min-w-0" style="grid-column: span 3">
+						<div
+							class="min-w-0"
+							:style="childIsModal() ? { gridColumn: 'span 3' } : undefined"
+						>
 							<Button
 								v-if="childIsModal()"
 								data-slot="open-nested"
@@ -346,22 +358,54 @@ function canToggleAt(index: number): boolean {
 	return context.conjunctionMode.value === "mixed" || index === 1;
 }
 
-// The handle's track only exists where there is a handle: an empty one would
-// indent every row of a tree that cannot be rearranged. A group's row spans the
-// three content tracks, which stay the three after the handle either way.
-const trackList = computed(() => {
-	const columns = context.columns.value;
-	return [
-		"minmax(66px, max-content)",
-		canReorder.value ? "max-content" : null,
-		columns.field,
-		columns.operator,
-		columns.value,
-		"max-content",
-	]
-		.filter(Boolean)
-		.join(" ");
-});
+/** The leading conjunction cell, wide enough for `Where` at any of its lengths. */
+const CONJUNCTION_TRACK = "minmax(66px, max-content)";
+
+/**
+ * The trailing actions' track. It takes the row's leftover width rather than the
+ * width of the buttons, and they sit at its end — so Remove lands on the
+ * container's end edge in every row, with the slack the content-sized cells
+ * before it did not use collecting harmlessly in between. `max-content` as the
+ * floor keeps the buttons from being squeezed when a row has no slack to give.
+ */
+const ACTIONS_TRACK = "minmax(max-content, 1fr)";
+
+/**
+ * The handle's own track, and only where there is a handle: an empty one would
+ * indent every row of a tree that cannot be rearranged. It sits after the
+ * conjunction so the three content tracks stay the three a group's row spans.
+ */
+const handleTrack = computed(() => (canReorder.value ? ["max-content"] : []));
+
+const trackList = computed(() =>
+	[
+		CONJUNCTION_TRACK,
+		...handleTrack.value,
+		context.columns.value.field,
+		context.columns.value.operator,
+		context.columns.value.value,
+		ACTIONS_TRACK,
+	].join(" ")
+);
+
+/**
+ * A card's row, whose middle is one stretching track rather than three sized to
+ * their contents: a group has no field, operator or value of its own, and a card
+ * that stopped where three content-sized cells stopped would leave its end edge
+ * somewhere arbitrary instead of against the actions beside it.
+ */
+const groupTrackList = computed(() =>
+	[CONJUNCTION_TRACK, ...handleTrack.value, "minmax(0, 1fr)", "max-content"].join(" ")
+);
+
+function trackListFor(node: unknown): string {
+	return isInlineGroup(node) ? groupTrackList.value : trackList.value;
+}
+
+/** Whether `node` draws as a card in this row, rather than as a button or a leaf. */
+function isInlineGroup(node: unknown): boolean {
+	return isGroup(node) && !childIsModal();
+}
 
 /** Id of the span holding a row's field label, which names its controls. */
 function rowFieldId(index: number): string {

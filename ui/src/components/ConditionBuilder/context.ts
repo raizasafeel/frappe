@@ -88,16 +88,24 @@ export const conditionBuilderKey: InjectionKey<ConditionBuilderContext> =
   Symbol("conditionBuilder");
 
 /**
- * Grid tracks for the leaf's three editable cells, sized once per group so the
- * cells line up row to row. `minmax(0, …fr)` rather than a bare `fr`: a bare
- * `fr` floors at min-content, so one long label pushes its row out of step.
+ * Grid tracks for the leaf's three editable cells. Each row resolves them
+ * against its own content — the group does not share one grid — so a row that
+ * names a long field is the only row that pays for it. `minmax(0, max-content)`
+ * rather than a bare `max-content`: the bare form floors at min-content, and a
+ * floor is what makes a grid overflow a narrow container instead of shrinking
+ * inside it.
  */
 export const DEFAULT_COLUMNS: Required<ConditionColumns> = {
-  // The operator track sizes to its own labels, with a floor so an empty row
-  // still shows a usable control; field and value split the remaining slack.
-  field: "minmax(0, 1fr)",
-  operator: "minmax(100px, max-content)",
-  value: "minmax(0, 1fr)",
+  // Each cell is the width of what it holds, which is what makes a row read as
+  // a phrase rather than as three boxes: `Status` gets a pill the width of the
+  // word and `Raised Outside Working Hours` one the width of the sentence, on
+  // the same row as an operator no wider than `Equals`. There is no `fr` here
+  // on purpose — an `fr` track is a share of the *leftover* space, so it would
+  // stretch a cell past its contents purely to use the width up. The row's
+  // leftover collects in the actions' track at the end instead.
+  field: "minmax(0, max-content)",
+  operator: "minmax(0, max-content)",
+  value: "minmax(0, max-content)",
 };
 
 /** Deepest nesting level offered. The root group is depth 0. */
