@@ -121,6 +121,7 @@ import type {
 	ConditionGroup as ConditionGroupType,
 	ConditionPath,
 	ConditionSlotProps,
+	Conjunction,
 	FieldConditionValue,
 } from "./types";
 
@@ -145,6 +146,7 @@ const props = withDefaults(defineProps<ConditionBuilderProps<TLeaf>>(), {
 	disabled: false,
 	readonly: false,
 	conjunctionMode: "mixed",
+	conjunctionPlacement: "row",
 	reorderable: true,
 });
 
@@ -448,6 +450,7 @@ provide(conditionBuilderKey, {
 	disabled: computed(() => props.disabled),
 	readonly: computed(() => props.readonly),
 	conjunctionMode: computed(() => props.conjunctionMode),
+	conjunctionPlacement: computed(() => props.conjunctionPlacement),
 	reorderable: computed(() => props.reorderable),
 
 	addCondition: (path: ConditionPath) => {
@@ -498,6 +501,11 @@ provide(conditionBuilderKey, {
 		const current = group.conjunctions[gap] ?? "and";
 		commit(setGroupConjunction(tree.value, path, current === "and" ? "or" : "and"));
 	},
+	// The header control names the value it wants, so this writes it to every gap
+	// rather than flipping what is there: two headers in a mixed tree would
+	// otherwise disagree about which way "flip" goes.
+	setConjunction: (path: ConditionPath, value: Conjunction) =>
+		commit(setGroupConjunction(tree.value, path, value)),
 	// A reorder keeps every path in the tree valid — only the two rows that
 	// swapped change what they address — so no `lastRemoval` is raised and an open
 	// nested dialog stays open.

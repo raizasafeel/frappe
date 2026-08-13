@@ -19,10 +19,60 @@
 			{{ groupName }}
 		</legend>
 
+		<!-- `header` placement: the group's one operator, and the buttons that add to
+		it, on a bar of its own. The rows below then hold nothing but conditions —
+		which is the point of the placement — and a nested card states how it joins
+		the rules around it without a cell in the row it sits in. The control is
+		hidden with fewer than two conditions rather than disabled: with no gap to
+		operate on it would be a dead control, not a locked one. -->
+		<div v-if="hasHeader" class="flex flex-wrap items-center justify-between gap-2">
+			<TabButtons
+				v-if="group.conditions.length > 1 && !context.readonly.value"
+				:model-value="headerConjunction"
+				:options="conjunctionOptions"
+				:aria-label="context.labels.value.conjunctionHint"
+				size="sm"
+				@update:model-value="onHeaderConjunction"
+			/>
+			<div v-else-if="group.conditions.length > 1" class="text-p-base text-ink-gray-5">
+				{{ headerWord }}
+			</div>
+			<div v-else class="text-p-sm text-ink-gray-5" aria-hidden="true">
+				{{ context.labels.value.groupSummary(group.conditions.length) }}
+			</div>
+
+			<div
+				v-if="!context.readonly.value"
+				class="flex gap-2"
+				:data-add-group="path.join('.')"
+				:data-condition-builder="context.builderId.value"
+			>
+				<slot name="addCondition" v-bind="addConditionProps()">
+					<Button
+						data-slot="add-condition"
+						variant="ghost"
+						:disabled="context.disabled.value"
+						:label="context.labels.value.addCondition"
+						icon-left="lucide-plus"
+						@click="context.addCondition(path)"
+					/>
+					<Button
+						v-if="canAddGroup"
+						data-slot="add-group"
+						variant="ghost"
+						:disabled="context.disabled.value"
+						:label="context.labels.value.addGroup"
+						icon-left="lucide-folder-plus"
+						@click="context.addGroup(path)"
+					/>
+				</slot>
+			</div>
+		</div>
+
 		<!-- The card's own name, and how much it holds — a nested group is otherwise
 		an unlabelled box. Hidden from the accessibility tree: the group is already
 		named by `aria-label`, and this would announce it a second time. -->
-		<div v-if="hasCard" class="text-p-sm text-ink-gray-5" aria-hidden="true">
+		<div v-if="hasCard && !hasHeader" class="text-p-sm text-ink-gray-5" aria-hidden="true">
 			{{ context.labels.value.groupSummary(group.conditions.length) }}
 		</div>
 
@@ -51,24 +101,26 @@
 					:data-condition-path="[...path, index].join('.')"
 					:data-condition-builder="context.builderId.value"
 				>
-					<slot v-if="index === 0" name="where" v-bind="whereProps()">
-						<ConjunctionCell
-							:index="index"
-							:count="group.conditions.length"
-							:conjunction="conjunctionAt(index)"
-							:can-toggle="canToggleAt(index)"
-							:group-path="path"
-						/>
-					</slot>
-					<slot v-else name="conjunction" v-bind="conjunctionProps(index)">
-						<ConjunctionCell
-							:index="index"
-							:count="group.conditions.length"
-							:conjunction="conjunctionAt(index)"
-							:can-toggle="canToggleAt(index)"
-							:group-path="path"
-						/>
-					</slot>
+					<template v-if="!hasHeader">
+						<slot v-if="index === 0" name="where" v-bind="whereProps()">
+							<ConjunctionCell
+								:index="index"
+								:count="group.conditions.length"
+								:conjunction="conjunctionAt(index)"
+								:can-toggle="canToggleAt(index)"
+								:group-path="path"
+							/>
+						</slot>
+						<slot v-else name="conjunction" v-bind="conjunctionProps(index)">
+							<ConjunctionCell
+								:index="index"
+								:count="group.conditions.length"
+								:conjunction="conjunctionAt(index)"
+								:can-toggle="canToggleAt(index)"
+								:group-path="path"
+							/>
+						</slot>
+					</template>
 
 					<!-- Pointer-only, and hidden from assistive tech: the row's menu
 					carries Move Up / Move Down, which is the reliable way to reorder
@@ -165,9 +217,9 @@
 		<!-- Two buttons rather than one menu: there are only ever two things to add,
 		and a menu makes the common one — a condition — cost a second click. Adding a
 		group is dropped rather than disabled past `maxDepth`, since nothing the user
-		can do here would re-enable it. -->
+		can do here would re-enable it. A header has already drawn these, above. -->
 		<div
-			v-if="!context.readonly.value"
+			v-if="!context.readonly.value && !hasHeader"
 			class="flex gap-2"
 			:data-add-group="path.join('.')"
 			:data-condition-builder="context.builderId.value"
@@ -231,7 +283,7 @@
 
 <script setup lang="ts">
 import { computed, ref, useId, watch } from "vue";
-import { Button, Dialog } from "frappe-ui";
+import { Button, Dialog, TabButtons } from "frappe-ui";
 // @ts-ignore — vuedraggable ships no bundled types
 import Draggable from "vuedraggable";
 import type { FilterField } from "../Filter/types";
@@ -358,6 +410,35 @@ function canToggleAt(index: number): boolean {
 	return context.conjunctionMode.value === "mixed" || index === 1;
 }
 
+/** Whether this group states its operator at its top rather than in its rows. */
+const hasHeader = computed(() => context.conjunctionPlacement.value === "header");
+
+/**
+ * The operator the header shows. A group whose gaps disagree — a tree authored
+ * in `mixed` and opened under a header — has no one answer, so the control shows
+ * neither until it is used, which then settles every gap at once.
+ */
+const headerConjunction = computed<Conjunction | undefined>(() => {
+	const gaps = props.group.conjunctions;
+	if (gaps.length === 0) return undefined;
+	return gaps.every((gap) => gap === gaps[0]) ? gaps[0] : undefined;
+});
+
+const headerWord = computed(() => {
+	const labels = context.labels.value;
+	if (headerConjunction.value === undefined) return labels.matchMixed;
+	return headerConjunction.value === "and" ? labels.and : labels.or;
+});
+
+const conjunctionOptions = computed(() => [
+	{ label: context.labels.value.and, value: "and" },
+	{ label: context.labels.value.or, value: "or" },
+]);
+
+function onHeaderConjunction(value: unknown) {
+	if (value === "and" || value === "or") context.setConjunction(props.path, value);
+}
+
 /** The leading conjunction cell, wide enough for `Where` at any of its lengths. */
 const CONJUNCTION_TRACK = "minmax(66px, max-content)";
 
@@ -377,9 +458,12 @@ const ACTIONS_TRACK = "minmax(max-content, 1fr)";
  */
 const handleTrack = computed(() => (canReorder.value ? ["max-content"] : []));
 
+/** The row's leading cell, which a header has taken out of the row entirely. */
+const conjunctionTrack = computed(() => (hasHeader.value ? [] : [CONJUNCTION_TRACK]));
+
 const trackList = computed(() =>
 	[
-		CONJUNCTION_TRACK,
+		...conjunctionTrack.value,
 		...handleTrack.value,
 		context.columns.value.field,
 		context.columns.value.operator,
@@ -395,7 +479,7 @@ const trackList = computed(() =>
  * somewhere arbitrary instead of against the actions beside it.
  */
 const groupTrackList = computed(() =>
-	[CONJUNCTION_TRACK, ...handleTrack.value, "minmax(0, 1fr)", "max-content"].join(" ")
+	[...conjunctionTrack.value, ...handleTrack.value, "minmax(0, 1fr)", "max-content"].join(" ")
 );
 
 function trackListFor(node: unknown): string {

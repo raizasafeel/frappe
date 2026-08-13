@@ -82,6 +82,19 @@ chip joins is visible rather than inferred from the row it happens to sit on. In
 same operator, which is said to a screen reader rather than repeated down the
 column as inert copies of the same word.
 
+### `conjunctionPlacement`
+
+`"row"` (the default) is the above: the operator sits in the row it joins, on the
+rule down the group. `"header"` puts one control at the top of each group
+instead — a segmented and/or beside that group's add buttons — and takes the
+leading cell out of every row, so a row holds nothing but its condition.
+
+A header shows one operator for the whole group, so it implies the `uniform`
+model whatever `conjunctionMode` says: setting it writes every gap. A tree whose
+gaps disagree shows neither segment until the control is used, which then settles
+them. The `#where` and `#conjunction` slots have no cell to replace under a
+header and are not rendered; `#addCondition` moves up into it.
+
 ## Reordering
 
 Rows can be dragged within their group by the handle beside the operator, and
@@ -158,6 +171,7 @@ Supplying an empty template removes that furniture entirely.
 | Prop | Does |
 | --- | --- |
 | `conjunctionMode` | `mixed` / `uniform` — an operator per gap, or per group |
+| `conjunctionPlacement` | `row` / `header` — the and/or in each row, or atop the group |
 | `columns` | the three cells' grid track sizes |
 | `maxDepth` | how deep nesting is offered (default 4) |
 | `modalDepth` | where nesting escapes into a dialog (default 2) |

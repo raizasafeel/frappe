@@ -10,6 +10,16 @@ export type Conjunction = "and" | "or";
  */
 export type ConditionConjunctionMode = "mixed" | "uniform";
 
+/**
+ * Where a group's and/or is edited. `'row'` puts it in each row's leading cell,
+ * on a rule down the group, so a gap is read where it sits. `'header'` puts one
+ * control at the top of the group and drops the cell, so a row is nothing but
+ * the condition — the shape of a rule builder that gives every group a header.
+ * A header holds one operator for the whole group, so it implies the `uniform`
+ * model whatever `conjunctionMode` says.
+ */
+export type ConditionConjunctionPlacement = "row" | "header";
+
 /** Child indices from the root group. `[]` addresses the root itself. */
 export type ConditionPath = number[];
 
@@ -208,6 +218,14 @@ export interface ConditionBuilderProps<TLeaf = FieldConditionValue> {
    * shares one. Defaults to `'mixed'`.
    */
   conjunctionMode?: ConditionConjunctionMode;
+
+  /**
+   * Whether each row carries the and/or joining it to the row above, or the
+   * group carries one at its top. Defaults to `'row'`. A header takes the
+   * `#where` and `#conjunction` slots out of the tree — there is no cell for
+   * them to replace — and moves the add buttons up beside itself.
+   */
+  conjunctionPlacement?: ConditionConjunctionPlacement;
 
   /**
    * Whether rows can be reordered within their group, by drag or from the row
