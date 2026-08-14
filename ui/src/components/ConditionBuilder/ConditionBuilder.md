@@ -84,6 +84,26 @@ how many of them are controls: the second row holds the one that rewrites the
 group, and the rows below render the word as text rather than as a disabled copy
 of the same button.
 
+### Rows taller than one line
+
+A row is as tall as its condition, and a condition is free to grow: a hint under
+a control, a wrapped value, a second row of inputs. The operator, the drag handle
+and the actions menu are anchored to the row's **first line** rather than centred
+in it, so a condition that grows downward does not carry its operator halfway
+down beside nothing.
+
+The first line is assumed to be one control tall, which is what the built-in leaf
+renders. A `#condition` slot that leads with something taller — visible field
+labels above its controls, say — will show the operator beside that instead. Use
+`#where` / `#conjunction` to place it yourself in that case; they exist for it.
+
+A row holding a nested group is the one row whose first line is not at its top
+edge, and the component accounts for it: the card draws its own border and
+padding, so the first line of that row is the first rule _inside_ the card, and
+the operator, handle and menu drop to meet it — a card's operator belongs beside
+the rule it introduces, not beside the card's empty top corner. Under
+`bordered="root"` or `"none"` there is no card and so no drop.
+
 ### `conjunctionPlacement`
 
 `"row"` (the default) is the above: the operator sits in the row it joins, on the

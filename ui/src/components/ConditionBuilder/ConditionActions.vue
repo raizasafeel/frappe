@@ -10,14 +10,10 @@
   where `moveUp` / `moveDown` and their guards are handed to the slot.
 -->
 <template>
-	<!-- `justify-self-end`: the row gives this cell every pixel the cells before it
-	did not use, so that the menu can sit on the row's end edge rather than
-	wherever the value control happened to stop. -->
-	<div
-		v-if="!context.readonly.value"
-		data-slot="condition-actions"
-		class="w-max justify-self-end"
-	>
+	<!-- The row's last track takes every pixel the cells before it did not use and
+	holds this against its end edge, so the menu lands on the container's edge in
+	every row rather than wherever the value control happened to stop. -->
+	<div v-if="!context.readonly.value" data-slot="condition-actions" class="w-max">
 		<Dropdown placement="right" :options="options">
 			<Button variant="ghost" icon="lucide-more-horizontal" :aria-labelledby="nameIds" />
 		</Dropdown>

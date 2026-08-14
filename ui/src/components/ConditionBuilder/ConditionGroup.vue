@@ -71,31 +71,52 @@
 		>
 			<template #item="{ element: condition, index }">
 				<li
-					class="grid min-w-0 items-center gap-x-2"
+					class="grid min-w-0 items-start gap-x-2"
 					:style="{ gridTemplateColumns: trackListFor(condition) }"
 					:data-condition-path="[...path, index].join('.')"
 					:data-condition-builder="context.builderId.value"
 				>
-					<template v-if="!hasHeader">
-						<slot v-if="index === 0" name="where" v-bind="whereProps()">
-							<ConjunctionCell
-								:index="index"
-								:count="group.conditions.length"
-								:conjunction="conjunctionAt(index)"
-								:can-toggle="canToggleAt(index)"
-								:group-path="path"
-							/>
-						</slot>
-						<slot v-else name="conjunction" v-bind="conjunctionProps(index)">
-							<ConjunctionCell
-								:index="index"
-								:count="group.conditions.length"
-								:conjunction="conjunctionAt(index)"
-								:can-toggle="canToggleAt(index)"
-								:group-path="path"
-							/>
-						</slot>
-					</template>
+					<!-- The row owns the leading cell, not what goes in it: the band
+					below is one control tall and centres its content, so the operator
+					lines up with the controls beside it whether it is the built-in cell
+					or a `#where` / `#conjunction` of the host's own — a bare word is
+					half the height of a control and would otherwise sit above it. The
+					band grows if what the host puts in it is taller.
+
+					The bracket is drawn here too, for the same reason: it spans the
+					row, which the cell inside it does not, and it is the group's mark
+					rather than the cell's — replacing the cell should not erase it. -->
+					<div
+						v-if="!hasHeader"
+						class="relative flex min-w-[66px] flex-col self-stretch"
+					>
+						<ConditionRule
+							:index="index"
+							:count="group.conditions.length"
+							:offset="firstLineOffset(condition)"
+						/>
+						<div
+							class="flex min-h-7 items-center justify-center"
+							:style="firstLineStyle(condition)"
+						>
+							<slot v-if="index === 0" name="where" v-bind="whereProps()">
+								<ConjunctionCell
+									:index="index"
+									:conjunction="conjunctionAt(index)"
+									:can-toggle="canToggleAt(index)"
+									:group-path="path"
+								/>
+							</slot>
+							<slot v-else name="conjunction" v-bind="conjunctionProps(index)">
+								<ConjunctionCell
+									:index="index"
+									:conjunction="conjunctionAt(index)"
+									:can-toggle="canToggleAt(index)"
+									:group-path="path"
+								/>
+							</slot>
+						</div>
+					</div>
 
 					<!-- Pointer-only, and hidden from assistive tech: it duplicates no
 					control, so there is nothing for it to name. A host that needs a
@@ -104,6 +125,7 @@
 					<div
 						v-if="canReorder"
 						class="condition-drag-handle flex h-7 w-4 cursor-grab items-center justify-center"
+						:style="firstLineStyle(condition)"
 						aria-hidden="true"
 					>
 						<span class="lucide-grip-vertical size-4 text-ink-gray-4" />
@@ -171,13 +193,21 @@
 						</template>
 					</ConditionRow>
 
-					<slot name="actions" v-bind="actionsProps(index, isGroup(condition))">
-						<ConditionActions
-							:path="[...path, index]"
-							:is-group="isGroup(condition)"
-							:field-label-id="rowFieldId(index)"
-						/>
-					</slot>
+					<!-- The same first-line band as the leading cell, for the same
+					reason: a host's `#actions` is level with the controls rather than
+					with the top of a row that has grown. -->
+					<div
+						class="flex min-h-7 items-center justify-end justify-self-end"
+						:style="firstLineStyle(condition)"
+					>
+						<slot name="actions" v-bind="actionsProps(index, isGroup(condition))">
+							<ConditionActions
+								:path="[...path, index]"
+								:is-group="isGroup(condition)"
+								:field-label-id="rowFieldId(index)"
+							/>
+						</slot>
+					</div>
 
 					<span :id="rowFieldId(index)" class="sr-only">
 						{{ leafFieldLabel(condition, context.fields.value) }}
@@ -244,6 +274,7 @@ import type { FilterField } from "../Filter/types";
 import AddConditionButton from "./AddConditionButton.vue";
 import ConditionActions from "./ConditionActions.vue";
 import ConditionRow from "./ConditionRow.vue";
+import ConditionRule from "./ConditionRule.vue";
 import ConjunctionCell from "./ConjunctionCell.vue";
 import { useConditionBuilderContext } from "./context";
 import { canNest, isGroup } from "./tree";
@@ -444,6 +475,35 @@ function trackListFor(node: unknown): string {
 /** Whether `node` draws as a card in this row, rather than as a button or a leaf. */
 function isInlineGroup(node: unknown): boolean {
 	return isGroup(node) && !childIsModal();
+}
+
+/**
+ * The card's own chrome above the first line inside it: its `border` and its
+ * `p-3`. Both are written here, on the group element, so they move together.
+ */
+const CARD_FIRST_LINE = 13;
+
+/**
+ * How far into a row its first line starts. Zero for a leaf, whose controls
+ * begin at the row's top edge — but a nested card's first rule begins inside the
+ * card's border and padding, and the operator joining that card to the rules
+ * above belongs beside that rule rather than beside the card's top edge, which is
+ * a corner with nothing on it.
+ *
+ * A card is the only thing this component puts in a row that displaces its own
+ * first line. A `#condition` that does the same — labels above its controls, a
+ * leading margin — is the host's to place with `#where` / `#conjunction`, since
+ * nothing here can measure it.
+ */
+function firstLineOffset(node: unknown): number {
+	const drawsCard = isInlineGroup(node) && context.bordered.value === "all";
+	return drawsCard ? CARD_FIRST_LINE : 0;
+}
+
+/** The offset as it is applied to the row's cells: the bracket takes the number. */
+function firstLineStyle(node: unknown): { marginTop: string } | undefined {
+	const offset = firstLineOffset(node);
+	return offset ? { marginTop: `${offset}px` } : undefined;
 }
 
 /** Id of the span holding a row's field label, which names its controls. */
