@@ -1,7 +1,8 @@
 import { getOperators } from "../Filter/operators";
 import type { OperatorOption } from "../Filter/operators";
-import type { FilterOperator } from "../Filter/types";
+import type { FilterField, FilterOperator } from "../Filter/types";
 import { isGroup } from "./tree";
+
 import type {
   ConditionGroup,
   ConditionNode,
@@ -12,6 +13,15 @@ import type {
 
 type Leaf = FieldConditionValue;
 type Node = ConditionNode<Leaf>;
+
+/**
+ * The tree helpers a host needs beside the conversions: a fresh tree, telling a
+ * group from a leaf, and setting one operator across a group. Re-exported rather
+ * than moved so that `tree.ts` stays what it is — the edit primitives the
+ * component runs on, which a consumer has no reason to reach for — while this
+ * file is the whole of the API that is not the component itself.
+ */
+export { emptyTree, isGroup, setGroupConjunction } from "./tree";
 
 const UNWRITABLE_OPERATORS: FilterOperator[] = ["timespan"];
 const IS_NOT: OperatorOption = { label: "Is not", value: "is not" };
@@ -93,6 +103,257 @@ function nodeToFrappe(node: Node): unknown {
   return [node.fieldname, node.operator, node.value];
 }
 
+export interface ConditionExpressionOptions {
+  /**
+   * Prefix every fieldname with this and a dot — `doc` for the `doc.status` an
+   * Assignment Rule is evaluated against. Left off, fieldnames are emitted bare.
+   */
+  fieldPrefix?: string;
+
+  /**
+   * The doctype's filterable fields, for the two rules that cannot be decided
+   * from a condition alone: a Check field compiles to its own truthiness, and a
+   * numeric field compiles to a number rather than a quoted string, which is
+   * what `doc.grand_total > "100"` would otherwise raise on. Without them both
+   * fall back to reading the value — `"Yes"` is taken for a Check, and every
+   * value is quoted — which is what the compilers in CRM and Helpdesk do.
+   *
+   * `ConditionBuilder` passes the fields it already derived from `doctype`, so
+   * a host binding `v-model:expression` gets this for free.
+   */
+  fields?: FilterField[];
+}
+
+/**
+ * Compile a tree into the Python expression `safe_eval` runs — the executable
+ * half of what a host persists, next to the array `toFrappeConditions` writes.
+ * Without this every consumer writes the compiler again, and the operators it
+ * has to implement are not a `join(" and ")`: `like` is a membership test, `is
+ * set` is the bare field, a Check field's `== "Yes"` is the bare field too.
+ *
+ * Compiled through `toFrappeConditions`, so a row without a field is treated
+ * exactly as it is on save — dropped.
+ */
+export function toConditionExpression(
+  tree: ConditionGroup<Leaf>,
+  options: ConditionExpressionOptions = {}
+): string {
+  return compileEntries(toFrappeConditions(tree), options);
+}
+
+/**
+ * Split one level of the array into its operands and the separators between
+ * them, running each entry through `read`. An entry `read` makes nothing of
+ * takes its pending separator with it, which is right at either end: a dropped
+ * first entry has none pending, so the token after it is never kept either.
+ *
+ * Both directions need exactly this — reading a stored array into a tree, and
+ * compiling one into an expression — and the rule is subtle enough that a second
+ * copy of it would eventually disagree with this one.
+ */
+function foldEntries<T>(
+  entries: unknown[],
+  read: (entry: unknown) => T | null
+): { items: T[]; separators: Conjunction[] } {
+  const items: T[] = [];
+  const separators: Conjunction[] = [];
+  let pending: Conjunction | null = null;
+
+  for (const entry of entries) {
+    const token = asConjunction(entry);
+    if (token !== null) {
+      pending = token;
+      continue;
+    }
+
+    const item = read(entry);
+    if (item === null) {
+      pending = null;
+      continue;
+    }
+
+    if (items.length > 0) separators.push(pending ?? "and");
+    items.push(item);
+    pending = null;
+  }
+
+  return { items, separators };
+}
+
+/** One level of the array, as the expression it evaluates to. */
+function compileEntries(
+  entries: unknown[],
+  options: ConditionExpressionOptions
+): string {
+  const { items, separators } = foldEntries(entries, (entry) => {
+    const compiled = compileEntry(entry, options);
+    return compiled === "" ? null : compiled;
+  });
+
+  return items.reduce(
+    (expression, operand, index) =>
+      index === 0
+        ? operand
+        : `${expression} ${separators[index - 1]} ${operand}`,
+    ""
+  );
+}
+
+/**
+ * A nested group is parenthesised, so the tree's own shape decides the reading
+ * rather than Python's precedence — the one place the two disagree is exactly
+ * the group a user nested to say `(a or b) and c`.
+ */
+function compileEntry(
+  entry: unknown,
+  options: ConditionExpressionOptions
+): string {
+  if (Array.isArray(entry) && Array.isArray(entry[0])) {
+    const nested = compileEntries(entry, options);
+    return nested === "" ? "" : `(${nested})`;
+  }
+  return compileLeaf(entry, options);
+}
+
+/**
+ * The operators that compile to a different Python token than they are written
+ * with. Anything absent is emitted as it stands: a legacy `timespan` has no
+ * rule here — which is why `conditionOperators` will not write a new one — and
+ * emitting it unchanged keeps the record legible instead of silently altering
+ * what the rule matches.
+ */
+const PYTHON_OPERATOR: Record<string, string> = {
+  equals: "==",
+  "=": "==",
+  "==": "==",
+  "not equals": "!=",
+  "!=": "!=",
+};
+
+/** Fieldtypes whose value is a number in the document, not a string. */
+const NUMERIC_FIELDTYPES = ["Int", "Float", "Currency", "Percent", "Rating"];
+
+/** The comparisons a number is worth emitting bare for. */
+const SCALAR_COMPARISONS = ["==", "!=", "<", "<=", ">", ">="];
+
+function compileLeaf(
+  entry: unknown,
+  options: ConditionExpressionOptions
+): string {
+  if (
+    !Array.isArray(entry) ||
+    entry.length !== 3 ||
+    typeof entry[0] !== "string"
+  ) {
+    return "";
+  }
+
+  const [fieldname, rawOperator, value] = entry;
+  const { fieldPrefix, fields } = options;
+  const field = fieldPrefix ? `${fieldPrefix}.${fieldname}` : fieldname;
+  const token = String(rawOperator).toLowerCase();
+  const operator = PYTHON_OPERATOR[token] ?? token;
+  const fieldtype = fields?.find((f) => f.fieldname === fieldname)?.fieldtype;
+
+  // A Check field holds the string "Yes"/"No" and compiles to the field itself:
+  // the document's value is a 0/1, which `== "Yes"` never matches. Given fields,
+  // the fieldtype decides and the guessing stops — including for a fieldname
+  // they do not carry, which is a field the rule has outlived rather than a
+  // Check. Given none, the value is all there is to go on and a Data field
+  // holding the word "Yes" reads as a Check, which is what CRM's and Helpdesk's
+  // compilers do.
+  const check = String(value).trim().toLowerCase();
+  const isCheck =
+    fields !== undefined
+      ? fieldtype === "Check"
+      : check === "yes" || check === "no";
+  if (
+    (operator === "==" || operator === "!=") &&
+    isCheck &&
+    (check === "yes" || check === "no")
+  ) {
+    return (check === "yes") === (operator === "==") ? field : `not ${field}`;
+  }
+
+  // `is`/`is not` take Set or Not Set, and all four pairings resolve to the
+  // field's truthiness. CRM's compiler leaves `is not` + `not set` to fall
+  // through to `field is not "not set"`, which is true of every document.
+  if (operator === "is" || operator === "is not") {
+    if (check === "set" || check === "not set") {
+      return (check === "set") === (operator === "is") ? field : `not ${field}`;
+    }
+  }
+
+  // `like` is not a Python operator. The `field and` guard is what keeps a null
+  // field out of the membership test, where it would raise rather than not match.
+  if (operator === "like") return `(${field} and ${quote(value)} in ${field})`;
+  if (operator === "not like")
+    return `(${field} and ${quote(value)} not in ${field})`;
+
+  if (operator === "in" || operator === "not in") {
+    const items = asList(value).map(quote).join(", ");
+    return `(${field} and ${field} ${operator} [${items}])`;
+  }
+
+  // `between` is two comparisons. The range arrives as a `[from, to]` pair from
+  // the range picker and as a comma string from a record written by hand.
+  const range = operator === "between" ? asRange(value) : null;
+  if (range) {
+    return `(${field} >= ${quote(range[0])} and ${field} <= ${quote(
+      range[1]
+    )})`;
+  }
+
+  // An unset value is the field's own falsiness, since there is no literal to
+  // compare against — `field == None` is not what an empty condition means.
+  if (value === null || value === undefined) {
+    return operator === "==" || operator === "is" ? `not ${field}` : field;
+  }
+
+  // A numeric field's value is a number in the document, so a quoted one raises
+  // rather than compares: `doc.grand_total > "100"` is a TypeError, not False.
+  if (
+    fieldtype !== undefined &&
+    NUMERIC_FIELDTYPES.includes(fieldtype) &&
+    SCALAR_COMPARISONS.includes(operator)
+  ) {
+    const number = Number(value);
+    if (String(value).trim() !== "" && !Number.isNaN(number)) {
+      return `${field} ${operator} ${number}`;
+    }
+  }
+
+  if (typeof value === "number") return `${field} ${operator} ${value}`;
+  // Python's booleans, not JavaScript's: `true` is a NameError under `safe_eval`.
+  if (typeof value === "boolean")
+    return `${field} ${operator} ${value ? "True" : "False"}`;
+
+  return `${field} ${operator} ${quote(value)}`;
+}
+
+/** A Python string literal. The backslash goes first, or it escapes the escapes. */
+function quote(value: unknown): string {
+  const escaped = String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  return `"${escaped}"`;
+}
+
+/** `in`'s operand: a list as it stands, a comma string as its parts. */
+function asList(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value.map((item) => String(item).trim());
+  if (typeof value === "string")
+    return value.split(",").map((item) => item.trim());
+  return [value];
+}
+
+/** `between`'s two ends, or null for a value that names only one of them. */
+function asRange(value: unknown): [unknown, unknown] | null {
+  if (Array.isArray(value))
+    return value.length === 2 ? [value[0], value[1]] : null;
+  if (typeof value !== "string" || !value.includes(",")) return null;
+  const [from, to] = value.split(",").map((part) => part.trim());
+  return [from, to];
+}
+
 /**
  * Parse the interleaved array back into a tree. An entry this parser cannot
  * model — a doctype-qualified filter, an unlisted operator, a stray token — is
@@ -107,31 +368,8 @@ export function fromFrappeConditions(
     return { conjunctions: [], conditions: [] };
   }
 
-  const nodes: Node[] = [];
-  const seps: Conjunction[] = [];
-  let pendingSep: Conjunction | null = null;
-
-  for (const item of conditions) {
-    const sep = asConjunction(item);
-    if (sep !== null) {
-      pendingSep = sep;
-      continue;
-    }
-    const node = frappeToNode(item);
-    // A dropped entry takes its pending token with it: kept, that token would
-    // re-join the entry's neighbours on a conjunction nobody wrote, or leave the
-    // level starting on one.
-    if (node === null) {
-      pendingSep = null;
-      continue;
-    }
-
-    if (nodes.length > 0) seps.push(pendingSep ?? "and");
-    nodes.push(node);
-    pendingSep = null;
-  }
-
-  return { conjunctions: seps, conditions: nodes };
+  const { items, separators } = foldEntries(conditions, frappeToNode);
+  return { conjunctions: separators, conditions: items };
 }
 
 /**

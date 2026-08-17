@@ -134,6 +134,23 @@ export interface ConditionBuilderProps<TLeaf = FieldConditionValue> {
   modelValue: ConditionGroup<TLeaf> | null;
 
   /**
+   * The Python expression the tree compiles to. Write-only: it is never read
+   * back, and exists so `v-model:expression` binds the Code field a host saves
+   * beside the tree. The component compiles with the fields it derived from
+   * `doctype`, so the Check and numeric rules are right without the host
+   * supplying anything.
+   */
+  expression?: string;
+
+  /**
+   * Prefixes every fieldname in the emitted expression — `doc` for the
+   * `doc.status` an SLA is evaluated against, nothing for an Assignment Rule,
+   * which core evaluates in the document's own namespace. Affects nothing on
+   * screen.
+   */
+  fieldPrefix?: string;
+
+  /**
    * Doctype whose Meta drives the fields offered by the built-in leaf and the
    * operators each one gets. Ignored when `fields` is supplied, and unused
    * when `#condition` replaces the leaf entirely.

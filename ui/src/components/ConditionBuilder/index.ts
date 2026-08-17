@@ -1,10 +1,18 @@
 // ConditionBuilder — a controlled editor for a nested and/or condition tree,
 // built over the same operator and value-control rules as `Filter` so the two
-// cannot drift. Hosts that persist Frappe's interleaved condition array convert
-// with `fromFrappeConditions` / `toFrappeConditions`.
+// cannot drift. Everything that is not the component is in `adapters`: reading
+// and writing Frappe's interleaved condition array, compiling the expression
+// `safe_eval` runs, and the three helpers for handling a tree.
 export { default as ConditionBuilder } from "./ConditionBuilder.vue";
-export { fromFrappeConditions, toFrappeConditions } from "./adapters";
-export { emptyTree, isGroup, setGroupConjunction } from "./tree";
+export {
+  emptyTree,
+  fromFrappeConditions,
+  isGroup,
+  setGroupConjunction,
+  toConditionExpression,
+  toFrappeConditions,
+} from "./adapters";
+export type { ConditionExpressionOptions } from "./adapters";
 export type {
   ConditionBorders,
   ConditionBuilderLabels,

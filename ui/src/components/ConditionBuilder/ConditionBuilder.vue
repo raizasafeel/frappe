@@ -99,6 +99,7 @@ import { Button } from "frappe-ui";
 import { useDoctypeMeta } from "../../composables/useDoctypeMeta";
 import { getFilterableFields } from "../Filter/getFilterableFields";
 import type { FilterField } from "../Filter/types";
+import { toConditionExpression } from "./adapters";
 import ConditionGroup from "./ConditionGroup.vue";
 import {
 	conditionBuilderKey,
@@ -159,6 +160,7 @@ const props = withDefaults(defineProps<ConditionBuilderProps<TLeaf>>(), {
 
 const emit = defineEmits<{
 	"update:modelValue": [value: ConditionGroupType<TLeaf>];
+	"update:expression": [value: string];
 }>();
 
 const rootRef = ref<HTMLElement | null>(null);
@@ -202,6 +204,26 @@ const fieldsError = computed<unknown>(() => (meta ? meta.error.value : null));
 function reloadFields() {
 	meta?.reload();
 }
+
+/**
+ * The Python expression the tree compiles to, emitted as `update:expression` so
+ * a host can bind `v-model:expression` to the Code field that runs and never
+ * call the compiler itself. It goes out on every edit and again when the
+ * doctype's fields arrive, since a Check and a numeric field compile from their
+ * fieldtype rather than from the value.
+ *
+ * A tree of leaves that are not field conditions — a host that replaced the row
+ * through `#condition` — has no expression, and compiles to the empty string
+ * rather than to something the server would choke on.
+ */
+const expression = computed(() =>
+	toConditionExpression(tree.value as unknown as ConditionGroupType<FieldConditionValue>, {
+		fields: fields.value,
+		fieldPrefix: props.fieldPrefix,
+	})
+);
+
+watch(expression, (value) => emit("update:expression", value), { immediate: true });
 
 const announcement = ref("");
 let pending: string[] = [];

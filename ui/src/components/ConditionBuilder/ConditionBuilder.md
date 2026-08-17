@@ -170,7 +170,9 @@ An entry that cannot be parsed as a condition — an unknown operator, a
 doctype-qualified filter, a stray `null`, number or token between two filters —
 is **dropped**, along with the conjunction beside it. The tree is what the editor
 shows and what the next save writes, so such an entry is gone from the record
-rather than carried through it.
+rather than carried through it. Nothing it could do instead is honest: it has no
+row to render, no Python to compile to, and leaving it in the array while the
+expression omits it makes the two halves of a record disagree.
 
 Two things are dropped rather than written: an empty group, and a row the user
 added but never gave a field to. Both are lossless — neither holds a condition —
@@ -178,8 +180,56 @@ and both would otherwise be written as an entry the host's compiler cannot
 destructure into a field, an operator and a value.
 
 A stored `==`, `=` or `!=` is read as an alias and re-saved in this component's
-vocabulary. No migration is needed: the host's compiler maps `equals`, `=` and
-`==` onto the same `==`, so the compiled expression does not change.
+vocabulary. No migration is needed: `equals`, `=` and `==` all compile to the
+same `==`, so the compiled expression does not change.
+
+### The expression
+
+The array is what a record stores; the Python expression is what `safe_eval`
+runs. A host writes both, and does not have to compile anything: bind the second
+v-model and the component keeps it, compiled with the fields it already derived
+from `doctype`.
+
+```vue
+<ConditionBuilder
+  v-model="tree"
+  v-model:expression="doc.assign_condition"
+  doctype="HD Ticket"
+/>
+```
+
+`fieldPrefix` is what differs between hosts, and it is not cosmetic: an SLA is
+evaluated as `{"doc": doc.as_dict()}`, so it wants `field-prefix="doc"`; an
+Assignment Rule is evaluated in the document's own namespace and wants none.
+
+The same compiler is exported for a host that needs an expression away from the
+control — comparing what a stored array evaluates to, say:
+
+```ts
+import { toConditionExpression } from "@framework/ui/ConditionBuilder";
+
+// status == "Open" and (subject and "refund" in subject) or (priority == "High")
+toConditionExpression(tree, { fieldPrefix: "doc", fields });
+```
+
+Two rules need the fields, which is why the control passes them and a bare call
+should too: a **Check** field compiles to its own truthiness (`is_open`, not
+`is_open == "Yes"`, which never matches a 0/1), and a **numeric** field compiles
+to a number (`total > 100`, not `total > "100"`, which raises rather than
+compares). Without fields both fall back to reading the value, which is what
+CRM's and Helpdesk's compilers do — and what makes a Data field holding the word
+"Yes" compile as a Check.
+
+The rules are not a `join(" and ")`. `like` compiles to a membership test
+guarded on the field, `is set` to the bare field, a Check field's `== "Yes"` to
+the bare field too, `between` to two comparisons, and `in` to a guarded list.
+A nested group is parenthesised rather than left to Python's precedence, and an
+operator with no rule — a legacy `timespan` — is emitted unchanged rather than
+quietly altering what the rule matches.
+
+The expression is compiled from the array, so the two always agree about what the
+record means: an entry dropped on read is absent from both, and a row with no
+field is written to neither.
 
 ## Slots
 
@@ -198,6 +248,8 @@ Supplying an empty template removes that furniture entirely.
 
 | Prop | Does |
 | --- | --- |
+| `expression` | write-only; `v-model:expression` gets the compiled Python |
+| `fieldPrefix` | prefixes fieldnames in that expression (`doc`), nothing on screen |
 | `columns` | the three cells' grid track sizes |
 | `maxDepth` | how deep nesting is offered (default 4) |
 | `modalDepth` | where nesting escapes into a dialog (default 2) |
