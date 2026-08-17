@@ -65,24 +65,26 @@ what Python means, since the array it compiles to is evaluated by `safe_eval`:
 straight to `v-model` arrives as `null`. Only leaving `modelValue` off entirely
 makes it uncontrolled, in which case it keeps the tree itself.
 
-### `conjunctionMode`
+### One operator per group
 
-`"mixed"` (the default) gives every gap between two rows its own and/or, so one
-level reads `A and B or C`. `"uniform"` gives the group a single operator: the
-control is live on the second row only and locked on every row below it, and
-changing it rewrites every gap in that group.
+Every gap carries its own and/or, so one level can read `A and B or C`. The
+operators sit on a rule drawn down the start edge of the group, so what a chip
+joins is visible rather than inferred from the row it happens to sit on. Every
+row shows its operator, including the row a nested group's card sits in — a card
+with nothing in that cell reads as unattached.
 
-Storage is per-gap in both modes, so a tree authored in one is readable in the
-other. A mixed tree opened in `uniform` keeps its operators until the first
-toggle flattens them.
+CRM and Helpdesk instead give a whole group a single operator. That is a host
+policy, not a mode here — apply it from the `#conjunction` slot, where
+`setGroupConjunction` writes every gap in the group at once:
 
-The operators sit on a rule drawn down the start edge of the group, so what a
-chip joins is visible rather than inferred from the row it happens to sit on.
-Every row shows its operator, including the row a nested group's card sits in —
-a card with nothing in that cell reads as unattached. What `uniform` changes is
-how many of them are controls: the second row holds the one that rewrites the
-group, and the rows below render the word as text rather than as a disabled copy
-of the same button.
+```vue
+<template #conjunction="{ conjunction, groupPath }">
+  <Button
+    :label="conjunction"
+    @click="tree = setGroupConjunction(tree, groupPath, conjunction === 'and' ? 'or' : 'and')"
+  />
+</template>
+```
 
 ### Rows taller than one line
 
@@ -104,19 +106,6 @@ the operator, handle and menu drop to meet it — a card's operator belongs besi
 the rule it introduces, not beside the card's empty top corner. Under
 `bordered="root"` or `"none"` there is no card and so no drop.
 
-### `conjunctionPlacement`
-
-`"row"` (the default) is the above: the operator sits in the row it joins, on the
-rule down the group. `"header"` puts one control at the top of each group
-instead — a segmented and/or beside that group's add buttons — and takes the
-leading cell out of every row, so a row holds nothing but its condition.
-
-A header shows one operator for the whole group, so it implies the `uniform`
-model whatever `conjunctionMode` says: setting it writes every gap. A tree whose
-gaps disagree shows neither segment until the control is used, which then settles
-them. The `#where` and `#conjunction` slots have no cell to replace under a
-header and are not rendered; `#addCondition` moves up into it.
-
 ## Reordering
 
 Rows can be dragged within their group by the handle beside the operator, which
@@ -130,13 +119,19 @@ sentence.
 
 A move never reparents: a row cannot leave the group it is in, and dropping one
 on a nested group's card does not put it inside. Grouping stays an explicit
-`Turn into a Group` / `Add Condition Group`, so a drag can never silently change
-what a rule means — only the order it reads in.
+`Turn into a Group` / `Add Condition Group`, so a drag can change the order a
+group reads in but never its shape.
 
 The operator travels with the row that displayed it, which is the rule a removal
 already follows. Moving `C` to the top of `A and B or C` gives `C or A and B`:
-the word `C` showed is now above `A`. In `uniform` every gap holds the same
-operator, so a move cannot change the rule at all.
+the word `C` showed is now above `A`.
+
+Order is meaning in a group whose gaps disagree, so a move there can change what
+the rule matches — `A and B or C and D`, with `B` dragged to the end, is
+`A or C and D and B`. That is the level being what it says it is, not the drag
+misbehaving: `and` binds tighter than `or`, so which rows sit either side of an
+`or` is the rule. Where every gap holds the same operator — a group the host
+keeps uniform — a move cannot change the rule at all.
 
 ## Operators
 
@@ -197,8 +192,6 @@ Supplying an empty template removes that furniture entirely.
 
 | Prop | Does |
 | --- | --- |
-| `conjunctionMode` | `mixed` / `uniform` — an operator per gap, or per group |
-| `conjunctionPlacement` | `row` / `header` — the and/or in each row, or atop the group |
 | `columns` | the three cells' grid track sizes |
 | `maxDepth` | how deep nesting is offered (default 4) |
 | `modalDepth` | where nesting escapes into a dialog (default 2) |

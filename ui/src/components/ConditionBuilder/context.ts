@@ -5,10 +5,7 @@ import type {
   ConditionBorders,
   ConditionBuilderLabels,
   ConditionColumns,
-  ConditionConjunctionMode,
-  ConditionConjunctionPlacement,
   ConditionPath,
-  Conjunction,
 } from "./types";
 
 /**
@@ -49,8 +46,6 @@ export interface ConditionBuilderContext {
   modalDepth: ComputedRef<number>;
   disabled: ComputedRef<boolean>;
   readonly: ComputedRef<boolean>;
-  conjunctionMode: ComputedRef<ConditionConjunctionMode>;
-  conjunctionPlacement: ComputedRef<ConditionConjunctionPlacement>;
   reorderable: ComputedRef<boolean>;
 
   addCondition: (groupPath: ConditionPath) => void;
@@ -61,13 +56,6 @@ export interface ConditionBuilderContext {
   ungroup: (path: ConditionPath) => void;
   /** Flip one gap. `gap` indexes `conjunctions`, i.e. the row index minus one. */
   toggleConjunction: (groupPath: ConditionPath, gap: number) => void;
-
-  /**
-   * Set every gap in a group at once, which is what a header control edits: it
-   * shows one operator for the group, so it writes one. A set and not a flip,
-   * since the control names the value it is asking for.
-   */
-  setConjunction: (groupPath: ConditionPath, value: Conjunction) => void;
 
   /**
    * Reorder one child within its group. `name` is what the announcement calls
@@ -126,13 +114,6 @@ export const DEFAULT_MODAL_DEPTH = 2;
 
 export const DEFAULT_BORDERS: ConditionBorders = "all";
 
-/** Per-gap operators. `uniform` — one operator per group — is opt-in. */
-export const DEFAULT_CONJUNCTION_MODE: ConditionConjunctionMode = "mixed";
-
-/** The and/or sits in the row it joins; a group header is opt-in. */
-export const DEFAULT_CONJUNCTION_PLACEMENT: ConditionConjunctionPlacement =
-  "row";
-
 /** Rows reorder unless the host sorts the tree itself. */
 export const DEFAULT_REORDERABLE = true;
 
@@ -170,7 +151,7 @@ export function defaultLabels(): ConditionBuilderLabels {
     matchAll: t("Match all of the following"),
     matchAny: t("Match any of the following"),
     matchMixed: t("Match a combination of the following"),
-    conjunctionHint: t("Changes how every condition in this group is combined"),
+    conjunctionHint: t("Changes how this condition joins the one above it"),
     addCondition: t("Add Condition"),
     addGroup: t("Add Condition Group"),
     turnIntoGroup: t("Turn into a Group"),

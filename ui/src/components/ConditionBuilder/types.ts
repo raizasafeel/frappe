@@ -2,24 +2,6 @@ import type { FilterField, FilterOperator, FilterValue } from "../Filter/types";
 
 export type Conjunction = "and" | "or";
 
-/**
- * `'mixed'` gives every gap its own control, so one level can read
- * `A and B or C`; `'uniform'` gives the whole group one operator, live on the
- * second row and locked below. Storage is per-gap either way, so a tree
- * authored in one mode is readable in the other.
- */
-export type ConditionConjunctionMode = "mixed" | "uniform";
-
-/**
- * Where a group's and/or is edited. `'row'` puts it in each row's leading cell,
- * on a rule down the group, so a gap is read where it sits. `'header'` puts one
- * control at the top of the group and drops the cell, so a row is nothing but
- * the condition — the shape of a rule builder that gives every group a header.
- * A header holds one operator for the whole group, so it implies the `uniform`
- * model whatever `conjunctionMode` says.
- */
-export type ConditionConjunctionPlacement = "row" | "header";
-
 /** Child indices from the root group. `[]` addresses the root itself. */
 export type ConditionPath = number[];
 
@@ -85,11 +67,14 @@ export interface ConditionBuilderLabels {
 
   /**
    * Name for a group whose gaps are not all the same operator, which `matchAll`
-   * and `matchAny` would both misstate. Only reachable in `mixed` mode.
+   * and `matchAny` would both misstate.
    */
   matchMixed: string;
 
-  /** Describes what the and/or button does. Never rendered as visible text. */
+  /**
+   * Describes what the and/or button does — flip one gap, not the group. Never
+   * rendered as visible text.
+   */
   conjunctionHint: string;
 
   addCondition: string;
@@ -204,20 +189,6 @@ export interface ConditionBuilderProps<TLeaf = FieldConditionValue> {
   bordered?: ConditionBorders;
 
   /**
-   * Whether each gap in a group carries its own and/or, or the whole group
-   * shares one. Defaults to `'mixed'`.
-   */
-  conjunctionMode?: ConditionConjunctionMode;
-
-  /**
-   * Whether each row carries the and/or joining it to the row above, or the
-   * group carries one at its top. Defaults to `'row'`. A header takes the
-   * `#where` and `#conjunction` slots out of the tree — there is no cell for
-   * them to replace — and moves the add buttons up beside itself.
-   */
-  conjunctionPlacement?: ConditionConjunctionPlacement;
-
-  /**
    * Whether rows can be reordered within their group, by drag or from the row
    * menu. Defaults to true. Order is meaningful to read even where it does not
    * change the result, so this is for hosts that sort the tree themselves and
@@ -270,9 +241,9 @@ export interface WhereSlotProps {
   groupPath: ConditionPath;
 
   /**
-   * The operator joining the first two rows, which is the group's only one in
-   * `uniform` mode. Undefined in a group with fewer than two children, which
-   * has no gap to carry one.
+   * The operator joining the first two rows — what a host applying one operator
+   * per group reads to render this cell. Undefined in a group with fewer than
+   * two children, which has no gap to carry one.
    */
   conjunction: Conjunction | undefined;
 }
@@ -291,13 +262,12 @@ export interface ConjunctionSlotProps {
   /** Path of the group this gap belongs to. */
   groupPath: ConditionPath;
 
-  /** Flip this gap — or, in `uniform` mode, the whole group. */
+  /** Flip this gap. */
   toggle: () => void;
 
   /**
-   * Whether this cell's control is live: every row after the first in `mixed`
-   * mode, only the second row in `uniform`, where the group has one operator.
-   * False while readonly.
+   * Whether this cell's control is live: every row after the first, and none
+   * while readonly, where the word renders as text.
    */
   canToggle: boolean;
 }

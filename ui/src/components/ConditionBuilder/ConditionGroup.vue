@@ -19,38 +19,6 @@
 			{{ groupName }}
 		</legend>
 
-		<!-- `header` placement: the group's one operator, and the buttons that add to
-		it, on a bar of its own. The rows below then hold nothing but conditions —
-		which is the point of the placement — and a nested card states how it joins
-		the rules around it without a cell in the row it sits in. The control is
-		hidden with fewer than two conditions rather than disabled: with no gap to
-		operate on it would be a dead control, not a locked one. -->
-		<div v-if="hasHeader" class="flex flex-wrap items-center justify-between gap-2">
-			<TabButtons
-				v-if="group.conditions.length > 1 && !context.readonly.value"
-				:model-value="headerConjunction"
-				:options="conjunctionOptions"
-				:aria-label="context.labels.value.conjunctionHint"
-				size="sm"
-				@update:model-value="onHeaderConjunction"
-			/>
-			<div v-else-if="group.conditions.length > 1" class="text-p-base text-ink-gray-5">
-				{{ headerWord }}
-			</div>
-			<span v-else />
-
-			<div
-				v-if="!context.readonly.value"
-				class="flex"
-				:data-add-group="path.join('.')"
-				:data-condition-builder="context.builderId.value"
-			>
-				<slot name="addCondition" v-bind="addConditionProps()">
-					<AddConditionButton :path="path" :can-add-group="canAddGroup" />
-				</slot>
-			</div>
-		</div>
-
 		<!-- Each row carries its own grid rather than sharing one with its siblings.
 		A shared grid sizes each track from the widest cell in the group, so every
 		field control is as wide as the longest label; per row, each control is the
@@ -86,10 +54,7 @@
 					The bracket is drawn here too, for the same reason: it spans the
 					row, which the cell inside it does not, and it is the group's mark
 					rather than the cell's — replacing the cell should not erase it. -->
-					<div
-						v-if="!hasHeader"
-						class="relative flex min-w-[66px] flex-col self-stretch"
-					>
+					<div class="relative flex min-w-[66px] flex-col self-stretch">
 						<ConditionRule
 							:index="index"
 							:count="group.conditions.length"
@@ -100,20 +65,10 @@
 							:style="firstLineStyle(condition)"
 						>
 							<slot v-if="index === 0" name="where" v-bind="whereProps()">
-								<ConjunctionCell
-									:index="index"
-									:conjunction="conjunctionAt(index)"
-									:can-toggle="canToggleAt(index)"
-									:group-path="path"
-								/>
+								<ConjunctionCell v-bind="cellProps(index)" />
 							</slot>
 							<slot v-else name="conjunction" v-bind="conjunctionProps(index)">
-								<ConjunctionCell
-									:index="index"
-									:conjunction="conjunctionAt(index)"
-									:can-toggle="canToggleAt(index)"
-									:group-path="path"
-								/>
+								<ConjunctionCell v-bind="cellProps(index)" />
 							</slot>
 						</div>
 					</div>
@@ -216,9 +171,8 @@
 			</template>
 		</Draggable>
 
-		<!-- A header has already drawn this, above. -->
 		<div
-			v-if="!context.readonly.value && !hasHeader"
+			v-if="!context.readonly.value"
 			class="flex"
 			:data-add-group="path.join('.')"
 			:data-condition-builder="context.builderId.value"
@@ -267,7 +221,7 @@
 
 <script setup lang="ts">
 import { computed, ref, useId, watch } from "vue";
-import { Button, Dialog, TabButtons } from "frappe-ui";
+import { Button, Dialog } from "frappe-ui";
 // @ts-ignore — vuedraggable ships no bundled types
 import Draggable from "vuedraggable";
 import type { FilterField } from "../Filter/types";
@@ -387,42 +341,12 @@ function conjunctionAt(index: number): Conjunction {
 }
 
 /**
- * Whether row `index`'s cell is live. `mixed` gives every gap its own control;
- * in `uniform` the group carries one operator, so only the second row's control
- * is live and every row below it is locked.
+ * Whether row `index`'s cell is live. Every gap carries its own operator, so
+ * every row but the first — which has no gap above it — has a control, and a
+ * read-only tree has none.
  */
 function canToggleAt(index: number): boolean {
-	if (index < 1 || context.readonly.value) return false;
-	return context.conjunctionMode.value === "mixed" || index === 1;
-}
-
-/** Whether this group states its operator at its top rather than in its rows. */
-const hasHeader = computed(() => context.conjunctionPlacement.value === "header");
-
-/**
- * The operator the header shows. A group whose gaps disagree — a tree authored
- * in `mixed` and opened under a header — has no one answer, so the control shows
- * neither until it is used, which then settles every gap at once.
- */
-const headerConjunction = computed<Conjunction | undefined>(() => {
-	const gaps = props.group.conjunctions;
-	if (gaps.length === 0) return undefined;
-	return gaps.every((gap) => gap === gaps[0]) ? gaps[0] : undefined;
-});
-
-const headerWord = computed(() => {
-	const labels = context.labels.value;
-	if (headerConjunction.value === undefined) return labels.matchMixed;
-	return headerConjunction.value === "and" ? labels.and : labels.or;
-});
-
-const conjunctionOptions = computed(() => [
-	{ label: context.labels.value.and, value: "and" },
-	{ label: context.labels.value.or, value: "or" },
-]);
-
-function onHeaderConjunction(value: unknown) {
-	if (value === "and" || value === "or") context.setConjunction(props.path, value);
+	return index >= 1 && !context.readonly.value;
 }
 
 /** The leading conjunction cell, wide enough for `Where` at any of its lengths. */
@@ -444,12 +368,9 @@ const ACTIONS_TRACK = "minmax(max-content, 1fr)";
  */
 const handleTrack = computed(() => (canReorder.value ? ["max-content"] : []));
 
-/** The row's leading cell, which a header has taken out of the row entirely. */
-const conjunctionTrack = computed(() => (hasHeader.value ? [] : [CONJUNCTION_TRACK]));
-
 const trackList = computed(() =>
 	[
-		...conjunctionTrack.value,
+		CONJUNCTION_TRACK,
 		...handleTrack.value,
 		context.columns.value.field,
 		context.columns.value.operator,
@@ -465,7 +386,7 @@ const trackList = computed(() =>
  * somewhere arbitrary instead of against the actions beside it.
  */
 const groupTrackList = computed(() =>
-	[...conjunctionTrack.value, ...handleTrack.value, "minmax(0, 1fr)", "max-content"].join(" ")
+	[CONJUNCTION_TRACK, ...handleTrack.value, "minmax(0, 1fr)", "max-content"].join(" ")
 );
 
 function trackListFor(node: unknown): string {
@@ -522,6 +443,16 @@ function leafFieldLabel(node: unknown, fields: FilterField[]): string {
 	const fieldname = (node as Partial<FieldConditionValue>).fieldname;
 	if (typeof fieldname !== "string" || fieldname === "") return "";
 	return fields.find((f) => f.fieldname === fieldname)?.label ?? fieldname;
+}
+
+/** What the built-in cell needs, whichever of the two slots falls back to it. */
+function cellProps(index: number) {
+	return {
+		index,
+		conjunction: conjunctionAt(index),
+		canToggle: canToggleAt(index),
+		groupPath: props.path,
+	};
 }
 
 function whereProps(): WhereSlotProps {

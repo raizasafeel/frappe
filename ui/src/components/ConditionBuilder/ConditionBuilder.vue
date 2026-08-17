@@ -103,8 +103,6 @@ import ConditionGroup from "./ConditionGroup.vue";
 import {
 	conditionBuilderKey,
 	DEFAULT_BORDERS,
-	DEFAULT_CONJUNCTION_MODE,
-	DEFAULT_CONJUNCTION_PLACEMENT,
 	DEFAULT_MAX_DEPTH,
 	DEFAULT_MODAL_DEPTH,
 	DEFAULT_REORDERABLE,
@@ -120,7 +118,6 @@ import {
 	isGroup,
 	moveNode,
 	removeNode,
-	setGroupConjunction,
 	toggleConjunction as toggleConjunctionAt,
 	turnIntoGroup as turnIntoGroupAt,
 	ungroup as ungroupAt,
@@ -132,7 +129,6 @@ import type {
 	ConditionGroup as ConditionGroupType,
 	ConditionPath,
 	ConditionSlotProps,
-	Conjunction,
 	FieldConditionValue,
 } from "./types";
 
@@ -158,8 +154,6 @@ const props = withDefaults(defineProps<ConditionBuilderProps<TLeaf>>(), {
 	bordered: DEFAULT_BORDERS,
 	disabled: false,
 	readonly: false,
-	conjunctionMode: DEFAULT_CONJUNCTION_MODE,
-	conjunctionPlacement: DEFAULT_CONJUNCTION_PLACEMENT,
 	reorderable: DEFAULT_REORDERABLE,
 });
 
@@ -463,8 +457,6 @@ provide(conditionBuilderKey, {
 	modalDepth: computed(() => props.modalDepth),
 	disabled: computed(() => props.disabled),
 	readonly: computed(() => props.readonly),
-	conjunctionMode: computed(() => props.conjunctionMode),
-	conjunctionPlacement: computed(() => props.conjunctionPlacement),
 	reorderable: computed(() => props.reorderable),
 
 	addCondition,
@@ -499,23 +491,10 @@ provide(conditionBuilderKey, {
 		lastRemoval.value = { path, seq: (removalSeq += 1) };
 		moveFocus(focusAfterRemove(next, path), "remove");
 	},
-	// `uniform`: the group carries one operator, so a toggle rewrites every gap
-	// rather than the one that was clicked.
-	toggleConjunction: (path: ConditionPath, gap: number) => {
-		if (props.conjunctionMode === "mixed") {
-			commit(toggleConjunctionAt(tree.value, path, gap));
-			return;
-		}
-		const group = getNode(tree.value, path);
-		if (group === undefined || !isGroup(group)) return;
-		const current = group.conjunctions[gap] ?? "and";
-		commit(setGroupConjunction(tree.value, path, current === "and" ? "or" : "and"));
-	},
-	// The header control names the value it wants, so this writes it to every gap
-	// rather than flipping what is there: two headers in a mixed tree would
-	// otherwise disagree about which way "flip" goes.
-	setConjunction: (path: ConditionPath, value: Conjunction) =>
-		commit(setGroupConjunction(tree.value, path, value)),
+	// One gap, the one that was clicked. A host wanting one operator per group
+	// runs `setGroupConjunction` from the `#conjunction` slot instead.
+	toggleConjunction: (path: ConditionPath, gap: number) =>
+		commit(toggleConjunctionAt(tree.value, path, gap)),
 	// A reorder keeps every path in the tree valid — only the two rows that
 	// swapped change what they address — so no `lastRemoval` is raised and an open
 	// nested dialog stays open.

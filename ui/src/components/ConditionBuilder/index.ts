@@ -4,14 +4,12 @@
 // with `fromFrappeConditions` / `toFrappeConditions`.
 export { default as ConditionBuilder } from "./ConditionBuilder.vue";
 export { fromFrappeConditions, toFrappeConditions } from "./adapters";
-export { emptyTree, isGroup } from "./tree";
+export { emptyTree, isGroup, setGroupConjunction } from "./tree";
 export type {
   ConditionBorders,
   ConditionBuilderLabels,
   ConditionBuilderProps,
   ConditionColumns,
-  ConditionConjunctionMode,
-  ConditionConjunctionPlacement,
   ConditionGroup,
   ConditionNode,
   ConditionPath,

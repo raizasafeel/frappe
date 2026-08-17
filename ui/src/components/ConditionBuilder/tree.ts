@@ -250,8 +250,8 @@ export function toggleConjunction<T>(
 }
 
 /**
- * Set every gap in a group at once — the `uniform` conjunction mode, where a
- * group carries a single operator and a toggle rewrites the whole run.
+ * Set every gap in a group at once. What a group header writes, and what a host
+ * that wants one operator per group runs from the `#conjunction` slot.
  */
 export function setGroupConjunction<T>(
   tree: ConditionGroup<T>,

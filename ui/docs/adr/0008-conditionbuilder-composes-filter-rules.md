@@ -79,8 +79,10 @@ deletes that operator and the row below keeps the one it was already showing.
 A group whose operators are mixed is also neither "match all" nor "match any",
 so its accessible name needs a third label, `matchMixed`.
 
-`conjunctionMode="uniform"` gives a host the group-wide behaviour instead: one
-operator per group, live on the second row only, and a toggle rewrites every
-gap. Storage stays per-gap in both modes, so a tree authored in one is readable
-in the other. The default is `mixed`; uniform is a compatibility affordance, not
-the shape the format deserves.
+A host that wants CRM's and Helpdesk's group-wide behaviour instead — one
+operator per group, changing it rewrites every gap — applies that policy itself:
+`setGroupConjunction`, which is what a group header already does and what the
+`#conjunction` slot can do in the rows. It is not a mode of this component. A
+prop for it made the component carry two editing models to serve a convention
+only some hosts hold, and made the group-wide one look like a supported shape of
+the format rather than what a host does to it.

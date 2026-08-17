@@ -9,13 +9,12 @@
   nothing else, so a host replacing it through `#where` / `#conjunction` keeps all
   three.
 
-  What `uniform` changes is how many of the words are controls, not how many are
-  shown: the group carries one operator, so the second row holds the button that
-  rewrites it and the rows below render the word as text. Text, not a disabled
-  button, for the reason `readonly` renders text: a disabled control is skipped
-  in a screen reader's forms mode and is exempt from the contrast minimum.
-  `Button` overwrites a fallthrough `aria-label` with its `label`, so what the
-  control does goes on `aria-describedby`.
+  Every gap carries its own operator, so every row after the first holds a
+  button. A read-only tree renders the word as text rather than a disabled
+  button: a disabled control is skipped in a screen reader's forms mode and is
+  exempt from the contrast minimum. `Button` overwrites a fallthrough
+  `aria-label` with its `label`, so what the control does goes on
+  `aria-describedby`.
 -->
 <template>
 	<div class="text-p-base text-ink-gray-5">
