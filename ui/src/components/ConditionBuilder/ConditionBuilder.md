@@ -61,9 +61,11 @@ JSON round-trip with no discriminator to keep in sync.
 what Python means, since the array it compiles to is evaluated by `safe_eval`:
 `and` binds tighter than `or`. Nest a group to override that.
 
-`null` means an empty tree, not "uncontrolled" — a nullable backend field bound
-straight to `v-model` arrives as `null`. Only leaving `modelValue` off entirely
-makes it uncontrolled, in which case it keeps the tree itself.
+`modelValue` is required and the component holds nothing of its own: an edit is
+an emit, and a host that drops it renders a tree that does not move. `null` is
+an empty tree — what a nullable backend field bound straight to `v-model`
+arrives as — so the only thing left for a missing prop to mean is a wiring
+mistake, which is worth failing on.
 
 ### One operator per group
 

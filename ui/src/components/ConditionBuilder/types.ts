@@ -125,11 +125,13 @@ export interface ConditionBuilderLabels {
 
 export interface ConditionBuilderProps<TLeaf = FieldConditionValue> {
   /**
-   * The condition tree. Use with v-model. `null` is an empty tree rather than
-   * "uncontrolled" — a nullable backend field bound straight to `v-model`
-   * arrives as `null`. Only `undefined` means uncontrolled.
+   * The condition tree. Use with v-model — the component renders what it is
+   * handed and keeps nothing of its own, so a host that never writes the emitted
+   * value renders a tree that does not change. `null` is an empty tree, which is
+   * what a nullable backend field bound straight to `v-model` arrives as; only
+   * leaving the prop off is a wiring mistake, and it is required so that fails.
    */
-  modelValue?: ConditionGroup<TLeaf> | null;
+  modelValue: ConditionGroup<TLeaf> | null;
 
   /**
    * Doctype whose Meta drives the fields offered by the built-in leaf and the

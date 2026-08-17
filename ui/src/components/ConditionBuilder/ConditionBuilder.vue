@@ -166,25 +166,11 @@ const id = useId();
 const fieldsErrorId = useId();
 const retryId = useId();
 
-// Backs uncontrolled mode: with no `modelValue`, nothing else holds the tree
-// between clicks. `shallowRef` skips Vue's deep UnwrapRef on the generic `TLeaf`.
-// Only `undefined` means uncontrolled; a `null` — what a nullable backend field
-// bound straight to `v-model` gives — is a controlled value that happens to be
-// empty, so it is written through as `emptyTree()`.
-const internalValue = shallowRef<ConditionGroupType<TLeaf>>(
-	props.modelValue ?? emptyTree<TLeaf>()
-);
-
-watch(
-	() => props.modelValue,
-	(value) => {
-		if (value !== undefined) internalValue.value = value ?? emptyTree<TLeaf>();
-	}
-);
-
-// `internalValue` is seeded and rewritten through `emptyTree()`, so it is never
-// null; only `modelValue` needs the fallback.
-const tree = computed<ConditionGroupType<TLeaf>>(() => props.modelValue ?? internalValue.value);
+// Controlled outright: the tree is the prop, and an edit is an emit the host
+// writes back. Nothing is held here, so a host that drops the event renders a
+// tree that does not move — which is the wiring bug, visible. `null` is the
+// empty tree a nullable backend field arrives as.
+const tree = computed<ConditionGroupType<TLeaf>>(() => props.modelValue ?? emptyTree<TLeaf>());
 
 // Not a `computed`: with nothing reactive to depend on it would cache its first
 // evaluation and freeze the labels in whatever language was current during the
@@ -249,7 +235,6 @@ function newLeaf(): TLeaf {
 }
 
 function commit(next: ConditionGroupType<TLeaf>) {
-	internalValue.value = next;
 	emit("update:modelValue", next);
 }
 
