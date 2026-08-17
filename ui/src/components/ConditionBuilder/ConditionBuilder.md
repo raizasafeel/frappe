@@ -160,11 +160,15 @@ doc.assign_condition_json = JSON.stringify(toFrappeConditions(tree));
 ```
 
 A level that mixes `and` and `or` stays flat and stays mixed, one token per gap.
-An entry that cannot be parsed — an unknown operator, a doctype-qualified filter,
-a stray `null`, number or token between two filters — is preserved verbatim and
-rendered non-editable, so such a record round-trips byte-identical instead of
-being deleted by the next save. Separator tokens are matched case-insensitively
-for the same reason.
+Separator tokens are matched case-insensitively, since a record hand-edited or
+written by another tool can carry `"OR"`, and reading that as an operand would
+invert the rule.
+
+An entry that cannot be parsed as a condition — an unknown operator, a
+doctype-qualified filter, a stray `null`, number or token between two filters —
+is **dropped**, along with the conjunction beside it. The tree is what the editor
+shows and what the next save writes, so such an entry is gone from the record
+rather than carried through it.
 
 Two things are dropped rather than written: an empty group, and a row the user
 added but never gave a field to. Both are lossless — neither holds a condition —

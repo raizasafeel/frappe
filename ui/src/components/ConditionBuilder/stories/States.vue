@@ -1,6 +1,6 @@
 <!--
   Every state the builder survives: empty and `null` models, read-only, disabled,
-  every value control, and entries the parser cannot model kept under `__raw`.
+  every value control, and a condition on a field the doctype no longer has.
 -->
 <template>
 	<div class="grid w-full max-w-3xl gap-8">
@@ -52,14 +52,12 @@ const allTypes = ref<ConditionGroup>({
 	],
 });
 
-// A doctype-qualified filter the parser cannot model as a leaf, plus a condition
-// naming a field that is not in `fields` at all.
-const preserved = ref<ConditionGroup>(
-	fromFrappeConditions([
-		["ToDo", "status", "==", "Open"],
-		"and",
-		["deleted_field", "equals", "Open"],
-	])
+// A stored condition naming a field that is not in `fields` at all — a field the
+// rule has outlived. The row stays readable and its picker stays live; an entry
+// the parser cannot model as a leaf at all is dropped on read, so there is none
+// to show here.
+const deletedField = ref<ConditionGroup>(
+	fromFrappeConditions([["deleted_field", "equals", "Open"]])
 );
 
 const cases = [
@@ -77,6 +75,6 @@ const cases = [
 		props: { reorderable: false },
 	},
 	{ title: "Every value control", model: allTypes, props: {} },
-	{ title: "Preserved and unknown entries", model: preserved, props: {} },
+	{ title: "Condition on a deleted field", model: deletedField, props: {} },
 ];
 </script>

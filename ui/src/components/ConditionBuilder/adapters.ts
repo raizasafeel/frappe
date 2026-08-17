@@ -36,7 +36,7 @@ export function conditionOperators(
 /**
  * Operators accepted on the way in, mapped to the vocabulary the tree stores.
  * The host's compiler treats `equals`, `=` and `==` alike, so Python's own
- * tokens read as aliases. An unlisted operator is preserved as a `RawLeaf`.
+ * tokens read as aliases. An entry on an unlisted operator is dropped.
  */
 const READ_OPERATOR: Record<string, FilterOperator> = {
   "==": "equals",
@@ -59,23 +59,6 @@ const READ_OPERATOR: Record<string, FilterOperator> = {
 };
 
 /**
- * An entry this parser can't model as a fieldname/operator/value leaf — a
- * doctype-qualified filter, or one on an unlisted operator — is preserved under
- * `__raw` so the next save doesn't delete it, and its row renders as text.
- */
-export interface RawLeaf extends FieldConditionValue {
-  /**
-   * The entry exactly as stored. Presence of the key marks the leaf raw, so a
-   * preserved `undefined` still round-trips.
-   */
-  __raw: unknown;
-}
-
-export function isRawLeaf(node: Leaf): node is RawLeaf {
-  return node !== null && typeof node === "object" && "__raw" in node;
-}
-
-/**
  * Convert a tree to the interleaved array that Frappe's Assignment Rule and
  * SLA condition fields persist. One gap, one token, in order — the array is
  * per-gap too, so a mixed level needs no flattening in either direction.
@@ -85,10 +68,8 @@ export function toFrappeConditions(tree: ConditionGroup<Leaf>): unknown[] {
   let written = 0;
 
   tree.conditions.forEach((node, index) => {
-    // A row with no field holds no condition, so dropping it is lossless. A
-    // `RawLeaf` carries an empty fieldname too, but its `__raw` is the entry it
-    // exists to round-trip.
-    if (!isGroup(node) && !isRawLeaf(node) && !node.fieldname) return;
+    // A row with no field holds no condition, so dropping it is lossless.
+    if (!isGroup(node) && !node.fieldname) return;
 
     const encoded = nodeToFrappe(node);
 
@@ -109,14 +90,15 @@ export function toFrappeConditions(tree: ConditionGroup<Leaf>): unknown[] {
 
 function nodeToFrappe(node: Node): unknown {
   if (isGroup(node)) return toFrappeConditions(node);
-  if (isRawLeaf(node)) return node.__raw;
   return [node.fieldname, node.operator, node.value];
 }
 
 /**
- * Parse the interleaved array back into a tree. An unrecognised entry is
- * preserved verbatim (see `RawLeaf`). A mixed level stays flat, one token per
- * gap: `safe_eval` binds `and` tighter than `or`, so nesting adds nothing.
+ * Parse the interleaved array back into a tree. An entry this parser cannot
+ * model — a doctype-qualified filter, an unlisted operator, a stray token — is
+ * dropped, so a record holding one is edited without it and saved without it. A
+ * mixed level stays flat, one token per gap: `safe_eval` binds `and` tighter
+ * than `or`, so nesting adds nothing.
  */
 export function fromFrappeConditions(
   conditions: unknown
@@ -135,10 +117,17 @@ export function fromFrappeConditions(
       pendingSep = sep;
       continue;
     }
-    // Never `continue` past an operand: dropping one both deletes it on the
-    // next save and re-joins its neighbours on a conjunction nobody wrote.
+    const node = frappeToNode(item);
+    // A dropped entry takes its pending token with it: kept, that token would
+    // re-join the entry's neighbours on a conjunction nobody wrote, or leave the
+    // level starting on one.
+    if (node === null) {
+      pendingSep = null;
+      continue;
+    }
+
     if (nodes.length > 0) seps.push(pendingSep ?? "and");
-    nodes.push(frappeToNode(item));
+    nodes.push(node);
     pendingSep = null;
   }
 
@@ -156,7 +145,8 @@ function asConjunction(item: unknown): Conjunction | null {
   return token === "and" || token === "or" ? token : null;
 }
 
-function frappeToNode(item: unknown): Node {
+/** A node, or null for an entry this parser cannot model. */
+function frappeToNode(item: unknown): Node | null {
   if (Array.isArray(item)) {
     // A new, still-empty group is persisted as `[]`; read it back as an empty group.
     if (item.length === 0) return { conjunctions: [], conditions: [] };
@@ -181,14 +171,7 @@ function frappeToNode(item: unknown): Node {
     }
   }
 
-  // Not a shape this parser can model (wrong length, doctype-qualified, an
-  // unlisted operator, or not an array). Preserve it verbatim — see `RawLeaf`.
-  // `equals` is a placeholder the type demands; nothing reads it on a raw row.
-  const preserved: RawLeaf = {
-    fieldname: "",
-    operator: "equals",
-    value: null,
-    __raw: item,
-  };
-  return preserved;
+  // Not a shape this parser can model: wrong length, doctype-qualified, an
+  // unlisted operator, or not an array at all.
+  return null;
 }

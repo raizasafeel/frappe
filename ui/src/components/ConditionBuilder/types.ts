@@ -98,7 +98,7 @@ export interface ConditionBuilderLabels {
   operator: string;
   value: string;
 
-  /** Shown in the field cell of a condition whose fieldname is not in `fields`. */
+  /** Shown in the field cell of a condition on a field the doctype no longer has. */
   unknownField: string;
 
   /** Shown when the doctype's fields could not be loaded. */

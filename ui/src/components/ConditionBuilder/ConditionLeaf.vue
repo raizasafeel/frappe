@@ -21,7 +21,7 @@
 				{{ fieldText }}
 			</span>
 			<TextInput
-				v-else-if="isRaw || isFieldsUnavailable"
+				v-else-if="isFieldsUnavailable"
 				class="w-full"
 				readonly
 				:modelValue="fieldText"
@@ -125,7 +125,7 @@ import { carryOver, defaultValueFor } from "../Filter/operators";
 import type { Filter, FilterField, FilterOperator } from "../Filter/types";
 import { valueControl } from "../Filter/valueControl";
 import { VALUE_CONTROLS } from "../Filter/valueControlComponents";
-import { conditionOperators, isRawLeaf } from "./adapters";
+import { conditionOperators } from "./adapters";
 import { useConditionBuilderContext } from "./context";
 import type { ConditionValue, FieldConditionValue } from "./types";
 
@@ -159,24 +159,15 @@ const fields = computed(() => context.fields.value);
 const field = computed(() => fields.value.find((f) => f.fieldname === props.condition.fieldname));
 
 const isReadonly = computed(() => Boolean(props.readonly || context.readonly.value));
-const isRaw = computed(() => isRawLeaf(props.condition));
-
 // An unmatched fieldname means two different things. While the field list is in
 // flight, or failed to load, it is unknowable and the row must not claim the
 // field is gone; once loaded, an unmatched name is a deleted field. Neither
 // drops the condition: the row stays readable and its field picker stays live.
 const isFieldsUnavailable = computed(
-	() =>
-		(context.fieldsLoading.value || Boolean(context.fieldsError.value)) &&
-		!field.value &&
-		!isRaw.value
+	() => (context.fieldsLoading.value || Boolean(context.fieldsError.value)) && !field.value
 );
 const isUnknownField = computed(
-	() =>
-		!isRaw.value &&
-		!isFieldsUnavailable.value &&
-		Boolean(props.condition.fieldname) &&
-		!field.value
+	() => !isFieldsUnavailable.value && Boolean(props.condition.fieldname) && !field.value
 );
 
 const fieldOptions = computed(() =>
@@ -206,7 +197,6 @@ const isUnsupportedField = computed(
 const isEditable = computed(
 	() =>
 		!isReadonly.value &&
-		!isRaw.value &&
 		!isFieldsUnavailable.value &&
 		!isUnknownField.value &&
 		!isUnsupportedField.value &&
@@ -287,13 +277,12 @@ const controlValue = computed<ConditionValue>(() => {
 });
 
 const fieldText = computed(() => {
-	if (isRaw.value) return labels.value.unknownField;
 	if (field.value) return field.value.label;
 	return props.condition.fieldname;
 });
 
 const operatorText = computed(() => {
-	if (isRaw.value || !props.condition.fieldname) return "";
+	if (!props.condition.fieldname) return "";
 	const known = operators.value.find((o) => o.value === props.condition.operator);
 	return known?.label ?? props.condition.operator;
 });
