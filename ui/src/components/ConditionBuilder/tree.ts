@@ -84,17 +84,44 @@ function parentOf<T>(
   return node !== undefined && isGroup(node) ? node : undefined;
 }
 
+/**
+ * Every edit is the same three steps — clone, resolve, bail if the path names
+ * nothing — around one mutation. Written once so a new operation cannot forget
+ * the clone and mutate the tree the host still holds, and so "a path that no
+ * longer resolves is a no-op" is one rule rather than nine copies of it.
+ */
+function editGroup<T>(
+  tree: ConditionGroup<T>,
+  groupPath: ConditionPath,
+  edit: (group: ConditionGroup<T>) => void
+): ConditionGroup<T> {
+  const next = clone(tree);
+  const group = getNode(next, groupPath);
+  if (group !== undefined && isGroup(group)) edit(group);
+  return next;
+}
+
+/** The same, for an edit that addresses a child by its place in its parent. */
+function editParent<T>(
+  tree: ConditionGroup<T>,
+  path: ConditionPath,
+  edit: (parent: ConditionGroup<T>, index: number) => void
+): ConditionGroup<T> {
+  const next = clone(tree);
+  const parent = parentOf(next, path);
+  if (parent) edit(parent, path[path.length - 1]);
+  return next;
+}
+
 export function addCondition<T>(
   tree: ConditionGroup<T>,
   groupPath: ConditionPath,
   leaf: T
 ): ConditionGroup<T> {
-  const next = clone(tree);
-  const group = getNode(next, groupPath);
-  if (group === undefined || !isGroup(group)) return next;
-  group.conditions.push(leaf);
-  pushConjunction(group);
-  return next;
+  return editGroup(tree, groupPath, (group) => {
+    group.conditions.push(leaf);
+    pushConjunction(group);
+  });
 }
 
 export function addGroup<T>(
@@ -102,12 +129,10 @@ export function addGroup<T>(
   groupPath: ConditionPath,
   leaf: T
 ): ConditionGroup<T> {
-  const next = clone(tree);
-  const group = getNode(next, groupPath);
-  if (group === undefined || !isGroup(group)) return next;
-  group.conditions.push({ conjunctions: [], conditions: [leaf] });
-  pushConjunction(group);
-  return next;
+  return editGroup(tree, groupPath, (group) => {
+    group.conditions.push({ conjunctions: [], conditions: [leaf] });
+    pushConjunction(group);
+  });
 }
 
 export function removeNode<T>(
@@ -147,24 +172,20 @@ export function moveNode<T>(
   from: number,
   to: number
 ): ConditionGroup<T> {
-  const next = clone(tree);
-  const group = getNode(next, groupPath);
-  if (group === undefined || !isGroup(group)) return next;
+  return editGroup(tree, groupPath, (group) => {
+    const last = group.conditions.length - 1;
+    if (from === to || from < 0 || to < 0 || from > last || to > last) return;
 
-  const last = group.conditions.length - 1;
-  if (from === to || from < 0 || to < 0 || from > last || to > last)
-    return next;
+    const [node] = group.conditions.splice(from, 1);
+    const carried = group.conjunctions[from === 0 ? 0 : from - 1] ?? "and";
+    removeConjunctionAt(group, from);
 
-  const [node] = group.conditions.splice(from, 1);
-  const carried = group.conjunctions[from === 0 ? 0 : from - 1] ?? "and";
-  removeConjunctionAt(group, from);
-
-  group.conditions.splice(to, 0, node);
-  // Only if the move re-opened a gap: a group of one has none to carry.
-  if (group.conditions.length > 1) {
-    group.conjunctions.splice(to === 0 ? 0 : to - 1, 0, carried);
-  }
-  return next;
+    group.conditions.splice(to, 0, node);
+    // Only if the move re-opened a gap: a group of one has none to carry.
+    if (group.conditions.length > 1) {
+      group.conjunctions.splice(to === 0 ? 0 : to - 1, 0, carried);
+    }
+  });
 }
 
 export function updateLeaf<T>(
@@ -172,55 +193,44 @@ export function updateLeaf<T>(
   path: ConditionPath,
   leaf: T
 ): ConditionGroup<T> {
-  const next = clone(tree);
-  const parent = parentOf(next, path);
-  if (!parent) return next;
-  parent.conditions[path[path.length - 1]] = leaf;
-  return next;
+  return editParent(tree, path, (parent, index) => {
+    parent.conditions[index] = leaf;
+  });
 }
 
 export function turnIntoGroup<T>(
   tree: ConditionGroup<T>,
   path: ConditionPath
 ): ConditionGroup<T> {
-  const next = clone(tree);
-  const parent = parentOf(next, path);
-  if (!parent) return next;
-
-  const index = path[path.length - 1];
-  const node = parent.conditions[index];
-  if (node === undefined || isGroup(node)) return next;
-
-  parent.conditions[index] = { conjunctions: [], conditions: [node] };
-  return next;
+  return editParent(tree, path, (parent, index) => {
+    const node = parent.conditions[index];
+    if (node === undefined || isGroup(node)) return;
+    parent.conditions[index] = { conjunctions: [], conditions: [node] };
+  });
 }
 
 export function ungroup<T>(
   tree: ConditionGroup<T>,
   path: ConditionPath
 ): ConditionGroup<T> {
-  const next = clone(tree);
-  if (path.length === 0) return next;
+  if (path.length === 0) return clone(tree);
 
-  const parent = parentOf(next, path);
-  if (!parent) return next;
+  return editParent(tree, path, (parent, index) => {
+    const group = parent.conditions[index];
+    if (group === undefined || !isGroup(group)) return;
 
-  const index = path[path.length - 1];
-  const group = parent.conditions[index];
-  if (group === undefined || !isGroup(group)) return next;
+    // An empty group leaves nothing behind, so this is a removal, gap and all.
+    if (group.conditions.length === 0) {
+      parent.conditions.splice(index, 1);
+      removeConjunctionAt(parent, index);
+      return;
+    }
 
-  // An empty group leaves nothing behind, so this is a removal, gap and all.
-  if (group.conditions.length === 0) {
-    parent.conditions.splice(index, 1);
-    removeConjunctionAt(parent, index);
-    return next;
-  }
-
-  parent.conditions.splice(index, 1, ...group.conditions);
-  // Only the group's inner gaps insert: the gaps that joined it to its siblings
-  // now join the outermost of those children, which is where they already sit.
-  parent.conjunctions.splice(index, 0, ...group.conjunctions);
-  return next;
+    parent.conditions.splice(index, 1, ...group.conditions);
+    // Only the group's inner gaps insert: the gaps that joined it to its
+    // siblings now join the outermost of those children, where they already sit.
+    parent.conjunctions.splice(index, 0, ...group.conjunctions);
+  });
 }
 
 /**
@@ -232,13 +242,11 @@ export function toggleConjunction<T>(
   groupPath: ConditionPath,
   index: number
 ): ConditionGroup<T> {
-  const next = clone(tree);
-  const group = getNode(next, groupPath);
-  if (group === undefined || !isGroup(group)) return next;
-  const current = group.conjunctions[index];
-  if (current === undefined) return next;
-  group.conjunctions[index] = current === "and" ? "or" : "and";
-  return next;
+  return editGroup(tree, groupPath, (group) => {
+    const current = group.conjunctions[index];
+    if (current === undefined) return;
+    group.conjunctions[index] = current === "and" ? "or" : "and";
+  });
 }
 
 /**
@@ -250,11 +258,9 @@ export function setGroupConjunction<T>(
   groupPath: ConditionPath,
   value: Conjunction
 ): ConditionGroup<T> {
-  const next = clone(tree);
-  const group = getNode(next, groupPath);
-  if (group === undefined || !isGroup(group)) return next;
-  group.conjunctions = group.conjunctions.map(() => value);
-  return next;
+  return editGroup(tree, groupPath, (group) => {
+    group.conjunctions = group.conjunctions.map(() => value);
+  });
 }
 
 /** The root group is depth 0, so a group at `path` sits at `path.length`. */
