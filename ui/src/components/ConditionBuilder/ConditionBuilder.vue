@@ -38,7 +38,7 @@
 			type="button"
 			data-slot="condition-empty"
 			class="flex w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-outline-gray-2 p-4 text-p-sm text-ink-gray-5"
-			@click="addToRoot"
+			@click="addCondition([])"
 		>
 			<slot name="empty">
 				<span class="lucide-plus size-4" aria-hidden="true" />
@@ -100,7 +100,18 @@ import { useDoctypeMeta } from "../../composables/useDoctypeMeta";
 import { getFilterableFields } from "../Filter/getFilterableFields";
 import type { FilterField } from "../Filter/types";
 import ConditionGroup from "./ConditionGroup.vue";
-import { conditionBuilderKey, mergeColumns, mergeLabels, uncachedLabels } from "./context";
+import {
+	conditionBuilderKey,
+	DEFAULT_BORDERS,
+	DEFAULT_CONJUNCTION_MODE,
+	DEFAULT_CONJUNCTION_PLACEMENT,
+	DEFAULT_MAX_DEPTH,
+	DEFAULT_MODAL_DEPTH,
+	DEFAULT_REORDERABLE,
+	mergeColumns,
+	mergeLabels,
+	uncachedLabels,
+} from "./context";
 import {
 	addCondition as addConditionAt,
 	addGroup as addGroupAt,
@@ -139,15 +150,17 @@ function asConditionSlotProps(slotProps: ConditionSlotProps<unknown>): Condition
 	return slotProps as ConditionSlotProps<TLeaf>;
 }
 
+// The defaults live in `context.ts` beside the shape they belong to, so the
+// prop and anything else reading one cannot drift apart.
 const props = withDefaults(defineProps<ConditionBuilderProps<TLeaf>>(), {
-	maxDepth: 4,
-	modalDepth: 2,
-	bordered: "all",
+	maxDepth: DEFAULT_MAX_DEPTH,
+	modalDepth: DEFAULT_MODAL_DEPTH,
+	bordered: DEFAULT_BORDERS,
 	disabled: false,
 	readonly: false,
-	conjunctionMode: "mixed",
-	conjunctionPlacement: "row",
-	reorderable: true,
+	conjunctionMode: DEFAULT_CONJUNCTION_MODE,
+	conjunctionPlacement: DEFAULT_CONJUNCTION_PLACEMENT,
+	reorderable: DEFAULT_REORDERABLE,
 });
 
 const emit = defineEmits<{
@@ -430,10 +443,11 @@ function focusAfterMenuCloses(path: ConditionPath) {
 	document.addEventListener("focusin", place);
 }
 
-function addToRoot() {
-	const next = addConditionAt(tree.value, [], newLeaf());
+/** Append a condition to the group at `path` and put focus in it. */
+function addCondition(path: ConditionPath) {
+	const next = addConditionAt(tree.value, path, newLeaf());
 	commit(next);
-	moveFocus(focusAfterAdd(next, []), "add");
+	moveFocus(focusAfterAdd(next, path), "add");
 }
 
 provide(conditionBuilderKey, {
@@ -453,11 +467,7 @@ provide(conditionBuilderKey, {
 	conjunctionPlacement: computed(() => props.conjunctionPlacement),
 	reorderable: computed(() => props.reorderable),
 
-	addCondition: (path: ConditionPath) => {
-		const next = addConditionAt(tree.value, path, newLeaf());
-		commit(next);
-		moveFocus(focusAfterAdd(next, path), "add");
-	},
+	addCondition,
 	addGroup: (path: ConditionPath) => {
 		const next = addGroupAt(tree.value, path, newLeaf());
 		commit(next);

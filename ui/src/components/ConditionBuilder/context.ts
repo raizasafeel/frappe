@@ -1,4 +1,4 @@
-import { computed, customRef, inject } from "vue";
+import { customRef, inject } from "vue";
 import type { ComputedRef, InjectionKey, Ref } from "vue";
 import type { FilterField } from "../Filter/types";
 import type {
@@ -236,77 +236,46 @@ export function uncachedLabels(
 }
 
 /**
- * Overlay a consumer's partial labels onto the defaults, key by key. Not a
- * spread: an object literal built from a host's optional strings carries the
+ * Overlay a consumer's partial object onto the defaults, key by key. Not a
+ * spread: an object literal built from a host's optional values carries the
  * missing ones as explicit `undefined` keys, which a spread copies over the
- * defaults and leaves the UI with an empty string where a label should be.
+ * defaults and leaves the UI with an empty string where a label should be. An
+ * unknown key is ignored rather than added.
  */
+function overlay<T extends object>(defaults: T, overrides?: Partial<T>): T {
+  if (!overrides) return defaults;
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value === undefined || !(key in defaults)) continue;
+    (defaults as Record<string, unknown>)[key] = value;
+  }
+  return defaults;
+}
+
 export function mergeLabels(
   overrides?: Partial<ConditionBuilderLabels>
 ): ConditionBuilderLabels {
-  const merged: ConditionBuilderLabels = defaultLabels();
-  if (!overrides) return merged;
-  for (const [key, value] of Object.entries(overrides)) {
-    if (value === undefined || !(key in merged)) continue;
-    (merged as Record<string, unknown>)[key] = value;
-  }
-  return merged;
+  return overlay(defaultLabels(), overrides);
 }
 
-/** The same key-by-key overlay for the column widths. */
 export function mergeColumns(
   overrides?: ConditionColumns
 ): Required<ConditionColumns> {
-  const merged: Required<ConditionColumns> = { ...DEFAULT_COLUMNS };
-  if (!overrides) return merged;
-  for (const [key, value] of Object.entries(overrides)) {
-    if (value === undefined || !(key in DEFAULT_COLUMNS)) continue;
-    (merged as Record<string, string>)[key] = value;
-  }
-  return merged;
+  return overlay({ ...DEFAULT_COLUMNS }, overrides);
 }
 
 /**
- * A complete, inert context for a node mounted with no builder above it, so call
- * sites can write `context.readonly.value` with no optional chaining. Its
- * mutators are no-ops: there is no tree to change, and silently doing nothing
- * beats throwing inside a render.
+ * Read the shared context. Every node that calls this is rendered by the builder
+ * — the nested dialog teleports its DOM but not its component tree — so a miss
+ * is a node used outside one, which has no tree to edit and nothing to render
+ * from. It says so rather than carrying a second, inert copy of every default
+ * that has to be kept in step with this one.
  */
-const FALLBACK_CONTEXT: ConditionBuilderContext = {
-  builderId: computed(() => ""),
-  fields: computed(() => []),
-  fieldsLoading: computed(() => false),
-  fieldsError: computed(() => null),
-  reloadFields: () => {},
-  columns: computed(() => DEFAULT_COLUMNS),
-  labels: uncachedLabels(defaultLabels),
-  bordered: computed<ConditionBorders>(() => DEFAULT_BORDERS),
-  maxDepth: computed(() => DEFAULT_MAX_DEPTH),
-  modalDepth: computed(() => DEFAULT_MODAL_DEPTH),
-  disabled: computed(() => false),
-  readonly: computed(() => false),
-  conjunctionMode: computed<ConditionConjunctionMode>(
-    () => DEFAULT_CONJUNCTION_MODE
-  ),
-  conjunctionPlacement: computed<ConditionConjunctionPlacement>(
-    () => DEFAULT_CONJUNCTION_PLACEMENT
-  ),
-  reorderable: computed(() => DEFAULT_REORDERABLE),
-
-  addCondition: () => {},
-  addGroup: () => {},
-  remove: () => {},
-  update: () => {},
-  turnIntoGroup: () => {},
-  ungroup: () => {},
-  toggleConjunction: () => {},
-  setConjunction: () => {},
-  move: () => {},
-  announce: () => {},
-  lastRemoval: computed(() => null),
-};
-
-/** Read the shared context, falling back to the inert one. */
 export function useConditionBuilderContext(): ConditionBuilderContext {
-  return inject(conditionBuilderKey, FALLBACK_CONTEXT);
+  const context = inject(conditionBuilderKey, null);
+  if (!context) {
+    throw new Error(
+      "ConditionBuilder: this component must be used inside one."
+    );
+  }
+  return context;
 }
