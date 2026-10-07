@@ -40,6 +40,45 @@ def get_setup_wizard_url() -> str:
 	return "/desk/setup-wizard"
 
 
+def get_prefilled_setup_data() -> dict | None:
+	"""Region and user values set before setup (e.g. at signup), so the wizard can skip asking, else None."""
+	settings = frappe.db.get_singles_dict("System Settings")
+	if not all(settings.get(key) for key in ("language", "country", "time_zone", "currency")):
+		return None
+
+	user = get_prefilled_user()
+	if not user:
+		return None
+
+	return {
+		"language": frappe.db.get_value("Language", settings.language, "language_name") or settings.language,
+		"country": settings.country,
+		"timezone": settings.time_zone,
+		"currency": settings.currency,
+		"full_name": user.full_name,
+		"email": user.email,
+	}
+
+
+def get_prefilled_user():
+	"""The signed-up user: the session user when eligible, else the oldest eligible user."""
+	filters = {
+		"enabled": 1,
+		"user_type": "System User",
+		"full_name": ("is", "set"),
+		"email": ("is", "set"),
+	}
+	fields = ["full_name", "email"]
+	if frappe.session.user not in frappe.STANDARD_USERS:
+		if user := frappe.db.get_value(
+			"User", {**filters, "name": frappe.session.user}, fields, as_dict=True
+		):
+			return user
+
+	filters["name"] = ("not in", frappe.STANDARD_USERS)
+	return frappe.db.get_value("User", filters, fields, as_dict=True, order_by="creation asc")
+
+
 def get_setup_stages(args, include_app_input_stages=True):  # nosemgrep
 	# App setup stage functions should not include frappe.db.commit
 	# That is done by frappe after successful completion of all stages
