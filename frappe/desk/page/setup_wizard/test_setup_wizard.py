@@ -365,6 +365,12 @@ class TestCloudPrefilledSetupData(IntegrationTestCase):
 		self.assertEqual(data["email"], "owner@example.com")
 		fc_api.assert_not_called()
 
+	def test_failure_is_not_cached(self):
+		"""A failed fetch was cached for 5 minutes, so a new site kept the classic wizard
+		on every reload. Unreleased, caught testing feat/setup-wizard-confirm-slide on Frappe Cloud."""
+		self.assertIsNone(self.call(side_effect=Exception("Frappe Cloud unreachable"))[0])
+		self.assertEqual(self.call(return_value=TEAM)[0]["email"], "owner@example.com")
+
 	def test_not_called_off_frappe_cloud(self):
 		data, fc_api = self.call(is_fc_site=False, return_value=TEAM)
 		self.assertIsNone(data)
