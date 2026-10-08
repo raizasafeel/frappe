@@ -58,22 +58,40 @@ frappe.pages["setup-wizard"].on_page_load = function (wrapper) {
 						frappe.setup.intro_apps = (frappe.boot.apps_data?.apps || []).filter(
 							(app) => app.logo && app.setup_wizard_text
 						);
-						frappe.setup.run_event("before_load");
-						var wizard_settings = {
-							parent: wrapper,
-							slides: frappe.setup.slides,
-							slide_class: frappe.setup.SetupWizardSlide,
-							unidirectional: 1,
-							done_state: 1,
-						};
-						frappe.wizard = new frappe.setup.SetupWizard(wizard_settings);
-						frappe.setup.run_event("after_load");
-						frappe.wizard.show_slide(cint(frappe.get_route()[1]));
+						frappe.setup.load_cloud_prefill(() => frappe.setup.make_wizard(wrapper));
 					},
 				});
 			},
 		});
 	});
+};
+
+// a site created from the Frappe Cloud dashboard gets its answers from the team owner
+frappe.setup.load_cloud_prefill = function (callback) {
+	if (!frappe.boot.is_fc_site || frappe.boot.setup_wizard_prefilled) return callback();
+	frappe.call({
+		method: "frappe.desk.page.setup_wizard.setup_wizard.get_cloud_prefilled_setup_data",
+		freeze: true,
+		callback: (r) => {
+			frappe.boot.setup_wizard_prefilled = r.message || null;
+			callback();
+		},
+		error: () => callback(),
+	});
+};
+
+frappe.setup.make_wizard = function (wrapper) {
+	frappe.setup.run_event("before_load");
+	var wizard_settings = {
+		parent: wrapper,
+		slides: frappe.setup.slides,
+		slide_class: frappe.setup.SetupWizardSlide,
+		unidirectional: 1,
+		done_state: 1,
+	};
+	frappe.wizard = new frappe.setup.SetupWizard(wizard_settings);
+	frappe.setup.run_event("after_load");
+	frappe.wizard.show_slide(cint(frappe.get_route()[1]));
 };
 
 frappe.pages["setup-wizard"].on_page_show = function () {

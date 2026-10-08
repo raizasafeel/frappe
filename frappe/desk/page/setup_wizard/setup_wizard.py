@@ -9,9 +9,10 @@ from frappe import _
 from frappe.app_state import clear_cache_after_maintenance
 from frappe.core.doctype.installed_applications.installed_applications import get_setup_wizard_completed_apps
 from frappe.geo.country_info import get_country_info
+from frappe.integrations.frappe_providers import frappecloud_billing
 from frappe.permissions import AUTOMATIC_ROLES
 from frappe.translate import send_translations, set_default_language
-from frappe.utils import cint, now, strip
+from frappe.utils import cint, now, strip, validate_email_address
 from frappe.utils.background_jobs import defer_enqueue_after_commit
 from frappe.utils.password import update_password
 from frappe.utils.synchronization import LockTimeoutError, filelock
@@ -77,6 +78,64 @@ def get_prefilled_user():
 
 	filters["name"] = ("not in", frappe.STANDARD_USERS)
 	return frappe.db.get_value("User", filters, fields, as_dict=True, order_by="creation asc")
+
+
+@frappe.whitelist()
+def get_cloud_prefilled_setup_data() -> dict | None:
+	"""Setup values from the Frappe Cloud team owner, for sites created from the dashboard, else None."""
+	frappe.only_for("System Manager")
+	if frappe.is_setup_complete():
+		frappe.throw(_("Setup is already complete."), frappe.PermissionError)
+
+	if not frappecloud_billing.is_fc_site():
+		return None
+
+	cache_key = "setup_wizard_cloud_prefill"
+	data = frappe.cache.get_value(cache_key)
+	if data is None:
+		data = fetch_cloud_prefilled_setup_data() or {}
+		frappe.cache.set_value(cache_key, data, expires_in_sec=300)
+	return data or None
+
+
+def fetch_cloud_prefilled_setup_data() -> dict | None:
+	mute_messages, frappe.flags.mute_messages = frappe.flags.mute_messages, True
+	try:
+		return get_setup_data_from_team(frappecloud_billing.api("team.info"))
+	except Exception:
+		frappe.log_error(title="Setup wizard: could not fetch the Frappe Cloud team")
+		return None
+	finally:
+		frappe.flags.mute_messages = mute_messages
+
+
+def get_setup_data_from_team(team: dict) -> dict | None:
+	"""Map `press.saas.api.team.info` (the Team doc with `user_info` of its owner) to wizard values."""
+	owner = team.get("user_info") or {}
+	full_name = " ".join(
+		name for name in (owner.get("first_name"), owner.get("last_name")) if name
+	) or team.get("billing_name")
+	email = validate_email_address(team.get("user") or "")
+	country = team.get("country")
+	if not (full_name and email and country and frappe.db.exists("Country", country)):
+		return None
+
+	country_info = get_country_info(country)
+	timezone = next(iter(country_info.get("timezones") or []), None)
+	# a team's own currency is its billing currency (INR or USD), not the business's
+	currency = country_info.get("currency") or team.get("currency")
+	if not (timezone and currency):
+		return None
+
+	language = frappe.db.get_single_value("System Settings", "language")
+	return {
+		"language": (language and frappe.db.get_value("Language", language, "language_name")) or "English",
+		"country": country,
+		"timezone": timezone,
+		"currency": currency,
+		"full_name": full_name,
+		"email": email,
+	}
 
 
 def get_setup_stages(args, include_app_input_stages=True):  # nosemgrep
