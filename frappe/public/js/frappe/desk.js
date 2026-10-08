@@ -143,6 +143,7 @@ frappe.Application = class Application {
 		if (frappe.boot.messages) {
 			frappe.msgprint(frappe.boot.messages);
 		}
+		this.show_setup_region_notice();
 
 		if (
 			frappe.user_roles.includes("System Manager") ||
@@ -187,6 +188,31 @@ frappe.Application = class Application {
 				location.reload(true);
 			});
 			dialog.get_close_btn().toggle(false);
+		});
+	}
+
+	// the setup wizard applied the region from signup without asking
+	show_setup_region_notice() {
+		const region = localStorage.getItem("setup_region_notice");
+		if (!region) return;
+		localStorage.removeItem("setup_region_notice");
+
+		const { country, currency, timezone, language } = JSON.parse(region);
+		const toast = frappe.ui.toast({
+			message: __("Region set to {0} · {1} · {2} · {3}", [
+				__(country),
+				currency,
+				timezone,
+				language,
+			]),
+			duration: 10000,
+			action: {
+				label: __("Change"),
+				onclick: () => {
+					toast.dismiss();
+					frappe.set_route("Form", "System Settings");
+				},
+			},
 		});
 	}
 
