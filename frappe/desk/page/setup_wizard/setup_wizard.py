@@ -69,10 +69,11 @@ def get_cloud_prefilled_setup_data() -> dict | None:
 
 	cache_key = "setup_wizard_cloud_prefill"
 	data = frappe.cache.get_value(cache_key)
-	if data is None:
-		data = fetch_cloud_prefilled_setup_data() or {}
-		frappe.cache.set_value(cache_key, data, expires_in_sec=300)
-	return data or None
+	if not data:
+		data = fetch_cloud_prefilled_setup_data()
+		if data:
+			frappe.cache.set_value(cache_key, data, expires_in_sec=300)
+	return data
 
 
 def fetch_cloud_prefilled_setup_data() -> dict | None:
