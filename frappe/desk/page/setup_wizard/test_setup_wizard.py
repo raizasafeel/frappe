@@ -123,6 +123,12 @@ TEAM = {
 }
 
 
+def site_conf(**keys):
+	"""This site's config without Frappe Cloud keys, plus `keys`."""
+	conf = frappe._dict({key: value for key, value in frappe.local.conf.items() if not key.startswith("fc_")})
+	return frappe._dict(conf, **keys)
+
+
 class TestCloudPrefilledSetupData(IntegrationTestCase):
 	def setUp(self):
 		frappe.cache.delete_value("setup_wizard_cloud_prefill")
@@ -139,6 +145,7 @@ class TestCloudPrefilledSetupData(IntegrationTestCase):
 
 	def call(self, is_fc_site=True, setup_complete=False, **api):
 		with (
+			patch.object(frappe.local, "conf", site_conf()),
 			patch.object(setup_wizard.frappecloud_billing, "is_fc_site", return_value=is_fc_site),
 			patch.object(setup_wizard.frappecloud_billing, "api", **api) as fc_api,
 			patch.object(frappe, "is_setup_complete", return_value=setup_complete),
@@ -201,6 +208,55 @@ class TestCloudPrefilledSetupData(IntegrationTestCase):
 		data, fc_api = self.call(is_fc_site=False, return_value=TEAM)
 		self.assertIsNone(data)
 		fc_api.assert_not_called()
+
+	def call_with_conf(self, conf, fresh_conf=None, **api):
+		"""`conf` holds the Frappe Cloud keys in the request's cached site config, `fresh_conf` in the file now."""
+		with (
+			patch.object(frappe.local, "conf", site_conf(**conf)),
+			patch.object(frappe, "get_site_config", return_value=site_conf(**(fresh_conf or conf))),
+			patch.object(setup_wizard.frappecloud_billing, "api", **api) as fc_api,
+			patch.object(frappe, "is_setup_complete", return_value=False),
+		):
+			return setup_wizard.get_cloud_prefilled_setup_data(), fc_api
+
+	def test_pending_until_frappe_cloud_sends_the_token(self):
+		"""Frappe Cloud writes `fc_team` when it creates a site and the token only once the site is live,
+		so a new dashboard site showed the classic wizard. Caught testing on Frappe Cloud."""
+		data, fc_api = self.call_with_conf({"fc_team": "test-team"}, return_value=TEAM)
+		self.assertEqual(data, {"pending": 1})
+		fc_api.assert_not_called()
+
+	def test_token_written_since_the_request_began_is_used(self):
+		data, fc_api = self.call_with_conf(
+			{"fc_team": "test-team"},
+			{"fc_team": "test-team", "fc_communication_secret": "test-token"},
+			return_value=TEAM,
+		)
+		self.assertEqual(data["email"], "owner@example.com")
+		fc_api.assert_called_once_with("team.info")
+
+	def test_ready_with_the_token(self):
+		data, fc_api = self.call_with_conf(
+			{"fc_team": "test-team", "fc_communication_secret": "test-token"}, return_value=TEAM
+		)
+		self.assertEqual(data["email"], "owner@example.com")
+		fc_api.assert_called_once_with("team.info")
+
+	def test_none_off_frappe_cloud(self):
+		data, fc_api = self.call_with_conf({}, return_value=TEAM)
+		self.assertIsNone(data)
+		fc_api.assert_not_called()
+
+	def test_cloud_setup_state(self):
+		for conf, state in (
+			({"fc_team": "test-team", "fc_communication_secret": "test-token"}, "ready"),
+			({"fc_team": "test-team"}, "pending"),
+			({}, None),
+		):
+			with self.subTest(conf=conf), patch.object(frappe.local, "conf", site_conf(**conf)):
+				self.assertEqual(setup_wizard.get_cloud_setup_state(), state)
+		with set_user("Guest"), patch.object(frappe.local, "conf", site_conf(fc_team="test-team")):
+			self.assertIsNone(setup_wizard.get_cloud_setup_state())
 
 	def test_only_system_managers_before_setup(self):
 		with set_user("Guest"), self.assertRaises(frappe.PermissionError):

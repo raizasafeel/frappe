@@ -19,7 +19,7 @@ from frappe.desk.doctype.desktop_settings.desktop_settings import get_desktop_pa
 from frappe.desk.doctype.form_tour.form_tour import get_onboarding_ui_tours
 from frappe.desk.doctype.route_history.route_history import frequently_visited_links
 from frappe.desk.form.load import get_meta_bundle
-from frappe.desk.page.setup_wizard.setup_wizard import get_prefilled_setup_data
+from frappe.desk.page.setup_wizard.setup_wizard import get_cloud_setup_state, get_prefilled_setup_data
 from frappe.email.inbox import get_email_accounts
 from frappe.integrations.frappe_providers.cloud_settings import (
 	get_boot_context as get_cloud_settings_boot_context,
@@ -450,6 +450,7 @@ def add_home_page(bootinfo, docs):
 	if not frappe.is_setup_complete():
 		bootinfo.setup_wizard_requires = frappe.get_hooks("setup_wizard_requires")
 		bootinfo.setup_wizard_prefilled = get_prefilled_setup_data()
+		bootinfo.setup_wizard_cloud = get_cloud_setup_state()
 
 	try:
 		page = frappe.desk.desk_page.get(home_page)

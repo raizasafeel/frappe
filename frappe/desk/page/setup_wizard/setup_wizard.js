@@ -58,7 +58,9 @@ frappe.pages["setup-wizard"].on_page_load = function (wrapper) {
 						frappe.setup.intro_apps = (frappe.boot.apps_data?.apps || []).filter(
 							(app) => app.logo && app.setup_wizard_text
 						);
-						frappe.setup.load_cloud_prefill(() => frappe.setup.make_wizard(wrapper));
+						frappe.setup.load_cloud_prefill(wrapper, () =>
+							frappe.setup.make_wizard(wrapper)
+						);
 					},
 				});
 			},
@@ -67,17 +69,36 @@ frappe.pages["setup-wizard"].on_page_load = function (wrapper) {
 };
 
 // a site created from the Frappe Cloud dashboard gets its answers from the team owner
-frappe.setup.load_cloud_prefill = function (callback) {
-	if (!frappe.boot.is_fc_site || frappe.boot.setup_wizard_prefilled) return callback();
-	frappe.call({
-		method: "frappe.desk.page.setup_wizard.setup_wizard.get_cloud_prefilled_setup_data",
-		freeze: true,
-		callback: (r) => {
-			frappe.boot.setup_wizard_prefilled = r.message || null;
-			callback();
-		},
-		error: () => callback(),
-	});
+frappe.setup.cloud_prefill_timeout = 120000;
+frappe.setup.cloud_prefill_interval = 3000;
+
+frappe.setup.load_cloud_prefill = function (wrapper, callback) {
+	if (!frappe.boot.setup_wizard_cloud || frappe.boot.setup_wizard_prefilled) return callback();
+
+	// a new site gets its Frappe Cloud token a few minutes after it is created
+	const $waiting = frappe.setup.SetupWizard.prototype
+		.get_message(
+			__("Setting things up"),
+			__("This can take a minute. Please keep this page open.")
+		)
+		.appendTo(wrapper);
+	const give_up_at = Date.now() + frappe.setup.cloud_prefill_timeout;
+	const done = (data) => {
+		$waiting.remove();
+		frappe.boot.setup_wizard_prefilled = data || null;
+		callback();
+	};
+	const retry = () => {
+		if (Date.now() >= give_up_at) return done(null);
+		setTimeout(fetch, frappe.setup.cloud_prefill_interval);
+	};
+	const fetch = () =>
+		frappe.call({
+			method: "frappe.desk.page.setup_wizard.setup_wizard.get_cloud_prefilled_setup_data",
+			callback: (r) => (r.message && !r.message.pending ? done(r.message) : retry()),
+			error: retry,
+		});
+	fetch();
 };
 
 frappe.setup.make_wizard = function (wrapper) {
@@ -695,7 +716,7 @@ frappe.setup.slides_settings = [
 						: __("Update Password"),
 				fieldtype: "Password",
 				length: 512,
-				depends_on: "eval:!frappe.boot.is_fc_site",
+				depends_on: "eval:!frappe.boot.setup_wizard_cloud",
 			},
 		],
 
@@ -713,7 +734,7 @@ frappe.setup.slides_settings = [
 				slide.form.fields_dict.email.df.read_only = 1;
 				slide.form.fields_dict.email.refresh();
 			} else {
-				if (!frappe.boot.is_fc_site) slide.form.fields_dict.password.df.reqd = 1;
+				if (!frappe.boot.setup_wizard_cloud) slide.form.fields_dict.password.df.reqd = 1;
 				slide.form.fields_dict.password.refresh();
 				if (frappe.setup.data.full_name) {
 					slide.form.fields_dict.full_name.set_input(frappe.setup.data.full_name);
