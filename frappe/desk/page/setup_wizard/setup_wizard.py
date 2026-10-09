@@ -80,14 +80,34 @@ def get_prefilled_user():
 	return frappe.db.get_value("User", filters, fields, as_dict=True, order_by="creation asc")
 
 
+def get_cloud_setup_state() -> str | None:
+	"""On a Frappe Cloud site: "ready", or "pending" until Frappe Cloud sends the site its token. Else None."""
+	if frappecloud_billing.is_fc_site():
+		return "ready"
+	# Frappe Cloud writes `fc_team` when it creates the site and the token only once the site is live
+	if frappe.conf.get("fc_team") and "System Manager" in frappe.get_roles():
+		return "pending"
+	return None
+
+
 @frappe.whitelist()
 def get_cloud_prefilled_setup_data() -> dict | None:
-	"""Setup values from the Frappe Cloud team owner, for sites created from the dashboard, else None."""
+	"""Setup values from the Frappe Cloud team owner, for sites created from the dashboard.
+
+	{"pending": 1} while the site has no Frappe Cloud token yet, else None.
+	"""
 	frappe.only_for("System Manager")
 	if frappe.is_setup_complete():
 		frappe.throw(_("Setup is already complete."), frappe.PermissionError)
 
-	if not frappecloud_billing.is_fc_site():
+	state = get_cloud_setup_state()
+	if state == "pending":
+		# a request's site config is cached for up to a minute, re-read it to see a token written since
+		frappe.local.conf = frappe.get_site_config()
+		state = get_cloud_setup_state()
+	if state == "pending":
+		return {"pending": 1}
+	if state != "ready":
 		return None
 
 	cache_key = "setup_wizard_cloud_prefill"
